@@ -1,0 +1,5 @@
+fastapi
+sqlmodel
+fastapi_pagination
+pydantic
+uvicorn
