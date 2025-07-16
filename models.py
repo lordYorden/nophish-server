@@ -14,6 +14,7 @@ class BaseNotification(SQLModel):
     title: str
     body: Optional[str]
     timestamp: Optional[int]
+    packageName: Optional[str]
     
 class Notification(BaseNotification, table=True):
     id: str = Field(default=None, primary_key=True)

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
-from contextlib import asynccontextmanager
+# from contextlib import asynccontextmanager
 from models import BaseSmsMessage, SmsMessage, BaseNotification, Notification
 import uuid
 from db import init_db, get_session
@@ -7,12 +7,12 @@ from sqlmodel import Session, select
 from fastapi_pagination import Page, add_pagination
 from fastapi_pagination.ext.sqlmodel import paginate
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    yield
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     #init_db()
+#     yield
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 add_pagination(app)
     
 @app.get("/")
