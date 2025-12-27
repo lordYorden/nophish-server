@@ -58,8 +58,26 @@ async def upload_notfication(to_upload: BaseNotification, session: Session = Dep
     session.refresh(notif)
     return notif
 
+@app.get("/notifications/byPackage/{package_name}")
+async def get_notifications(package_name: str, session: Session = Depends(get_session)) -> Page[Notification]:
+    return paginate(session=session,
+                    query=select(Notification).where(Notification.packageName == package_name))
+
 @app.get("/notifications")
 async def get_notifications(session: Session = Depends(get_session)) -> Page[Notification]:
-    return paginate(session=session,
-                    query=select(Notification))
+    return paginate(session=session,query=select(Notification))
+
+
+# # give a fucntion decorator to use above pageination
+# def paginate_format(data: Page[Notification]) -> dict:
+#     return {
+#         "total": data["total"],
+#         "items": data["items"],
+#     }
+
+if __name__ == "__main__":
+
+    import uvicorn
+    uvicorn.run(app, host="localhost", port=8000, log_level="debug")
+
 
