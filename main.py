@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
 # from contextlib import asynccontextmanager
-from models import BaseSmsMessage, SmsMessage, BaseNotification, Notification
+from models import BaseSmsMessage, SmsMessage, BaseNotification, Notification, BaseReleventInfo, ReleventInfo
 import uuid
 from db import init_db, get_session
 from sqlmodel import Session, select
 from fastapi_pagination import Page, add_pagination
 from fastapi_pagination.ext.sqlmodel import paginate
+from hashlib import sha256
 
 # @asynccontextmanager
 # async def lifespan(app: FastAPI):
@@ -52,8 +53,46 @@ async def get_messages(phone_number: str, session: Session = Depends(get_session
 async def upload_notfication(to_upload: BaseNotification, session: Session = Depends(get_session)) -> Notification:
     id: str = str(uuid.uuid4())
     notif = Notification(id=id, **to_upload.model_dump())
+    
+    #if timestamp and title are the same as an existing message, do not add
+    existing_notif = session.exec(
+        select(Notification).where(
+            (Notification.timestamp == to_upload.timestamp) &
+            (Notification.title == to_upload.title)
+        )
+    ).first()
+    
+    if existing_notif:
+        return existing_notif
+    
     session.add(notif)
     
+    session.commit()
+    session.refresh(notif)
+    return notif
+
+
+def to_hash_sha256(data: str) -> str:
+    hash_object = sha256(data.encode('utf-8'))
+    return hash_object.hexdigest()
+
+@app.post("/notifications/rel")
+async def upload_notfication(to_upload: BaseReleventInfo, session: Session = Depends(get_session)) -> ReleventInfo:
+    id: str = str(uuid.uuid4())
+    notif = ReleventInfo(id=id, **to_upload.model_dump())
+    
+    #check for existing
+    existing_notif = session.exec(
+        select(ReleventInfo).where(
+            (ReleventInfo.hash == to_upload.hash)
+        )
+    ).first()
+    
+    if existing_notif:
+        return existing_notif
+    
+    
+    session.add(notif)
     session.commit()
     session.refresh(notif)
     return notif
@@ -66,14 +105,6 @@ async def get_notifications(package_name: str, session: Session = Depends(get_se
 @app.get("/notifications")
 async def get_notifications(session: Session = Depends(get_session)) -> Page[Notification]:
     return paginate(session=session,query=select(Notification))
-
-
-# # give a fucntion decorator to use above pageination
-# def paginate_format(data: Page[Notification]) -> dict:
-#     return {
-#         "total": data["total"],
-#         "items": data["items"],
-#     }
 
 if __name__ == "__main__":
 
