@@ -5,7 +5,6 @@ from sqlalchemy import pool
 from sqlmodel import SQLModel
 from alembic import context
 from pathlib import Path
-from models import SmsMessage, Notification
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
