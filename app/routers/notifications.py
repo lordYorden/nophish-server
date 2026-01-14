@@ -1,9 +1,10 @@
 import uuid
 from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlmodel import paginate
-from app.database import get_session
+from app.database import get_session, get_redis_pool
+from arq.connections import ArqRedis
 from app.scheme.notification import BaseNotification, Notification, BaseReleventInfo, ReleventInfo
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -37,7 +38,9 @@ async def get_notifications(session: Session = Depends(get_session)) -> Page[Not
     return paginate(session=session, query=select(Notification))
     
 @router.post("/rel", response_model=ReleventInfo)
-async def upload_relevant_info(to_upload: BaseReleventInfo, session: Session = Depends(get_session)) -> ReleventInfo:
+async def upload_relevant_info(to_upload: BaseReleventInfo,
+                                session: Session = Depends(get_session),
+                                pool: ArqRedis = Depends(get_redis_pool)) -> ReleventInfo:
     # check for existing
     existing_notif = session.exec(
         select(ReleventInfo).where(
@@ -54,10 +57,17 @@ async def upload_relevant_info(to_upload: BaseReleventInfo, session: Session = D
     session.commit()
     session.refresh(notif)
 
-    
+    await pool.enqueue_job("detector_pipeline", notif)
 
     return notif
 
 @router.get("/rel", response_model=Page[ReleventInfo])
 async def get_notifications(session: Session = Depends(get_session)) -> Page[ReleventInfo]:
     return paginate(session=session, query=select(ReleventInfo))
+
+
+@router.delete("/rel", status_code=204)
+async def delete_all_relevant_info(session: Session = Depends(get_session)):
+    session.exec(delete(ReleventInfo))
+    session.commit()
+    return

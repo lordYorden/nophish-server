@@ -1,0 +1,20 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379" # No host port needed, Testcontainers will pick a random one
+
+  worker:
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    environment:
+      - REDIS_HOST=redis
+      - UV_PROJECT_ENVIRONMENT=/venv
+    volumes:
+      - .:/app
+      - /venv
+      - /app/.venv
+    working_dir: /app
+    # uv run automatically syncs the environment based on pyproject.toml
+    command: uv run arq app.detectors.tasks.WorkerSettings
+    depends_on:
+      - redis
