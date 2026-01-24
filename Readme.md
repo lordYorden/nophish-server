@@ -1,4 +1,4 @@
-# NoPish (backend)
+# NoPish (backend) - outdated
 
 Phishing prevention tool for Android, as part of my Final Project.
 
