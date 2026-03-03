@@ -1,4 +1,4 @@
-# NoPish (backend) - outdated
+# NoPish (backend)
 
 Phishing prevention tool for Android, as part of my Final Project.
 
@@ -8,120 +8,106 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.13 or higher
+- Docker (for Redis and background workers)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ### Installation & Setup
 
-1. **Install dependencies**
+1. **Sync dependencies**
 
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
+
 2. **Run database migrations**
 
    ```bash
-   alembic upgrade head
+   uv run alembic upgrade head
    ```
+
 3. **Run the server**
 
    ```bash
-   uvicorn main:app
+   uv run python main.py
    ```
 
-   **[Optional] For development:**
+   **Note**: The server uses `Testcontainers` to automatically manage a Redis instance and a worker container for the detection pipeline. Ensure Docker is running.
 
-   ```bash
-   uvicorn main:app --reload
-   ```
 4. **Access the API**
-
    - API Base URL: `http://localhost:8000`
    - Interactive API Documentation: `http://localhost:8000/docs`
-   - OpenAPI JSON Schema: `http://localhost:8000/openapi.json`
-
-### Development Notes
-
-- Use `--reload` flag only in development for auto-restart on file changes
-- Default server runs on `localhost:8000`
 
 ## Tech Specification
 
 ### Architecture
 
-- **Framework**: using `FastAPI` with `Pydantic`
+- **Framework**: `FastAPI` with `Pydantic`
 - **Database**: `SQLite` with `SQLModel` ORM
-- **Pagination**: FastAPI Pagination for large datasets
-- **Migrations**: using `Alembic` for schema versioning
+- **Background Tasks**: `arq` (Redis-based job queue) for asynchronous phishing detection
+- **AI Engine**: `OpenAI` (via LLM module) for message analysis
+- **Infrastructure**: `Docker` integration via `Testcontainers` for seamless development
+- **Messaging**: `Firebase Cloud Messaging (FCM)` for real-time phishing alerts
+- **Migrations**: `Alembic` for schema versioning
+- **Package Manager**: `uv`
+
+### Detection Pipeline
+
+When "Relevant Info" is uploaded, a background job is enqueued:
+
+1. **LLM Check**: Analyzes the message content for phishing patterns using LLM.
+2. **Parallel Modules**: Runs multiple detection logic modules simultaneously.
+3. **Aggregation**: Results are aggregated; if a majority flags the content as phishing, a push notification is sent to the user via FCM.
 
 ### API Endpoints
 
 #### SMS Messages
 
 - `POST /messages` - Upload SMS message data
-- `GET /messages?page={page}&size={size}` - Get paginated list of all SMS messages
-  - `page` (optional): Page number (default: 1)
-  - `size` (optional): Items per page (default: 50)
+- `GET /messages` - Get paginated list of all SMS messages
 - `GET /messages/{message_id}` - Get specific SMS message by ID
-- `GET /messages/byNumber/{phone_number}?page={page}&size={size}` - Get paginated SMS messages by phone number
-  - `page` (optional): Page number (default: 1)
-  - `size` (optional): Items per page (default: 50)
+- `GET /messages/byNumber/{phone_number}` - Get paginated SMS messages by phone number
 
 #### Notifications
 
-- `POST /notifications` - Upload notification data
-- `GET /notifications?page={page}&size={size}` - Get paginated list of all notifications
-  - `page` (optional): Page number (default: 1)
-  - `size` (optional): Items per page (default: 50)
-
-### Database Configuration
-
-**Database Type**: SQLite
-
-**Alembic Configuration:**
-
-- **Config File**: `alembic.ini` - Contains Alembic settings and database URL
-- **Environment**: `migrations/env.py` - Handles migration environment setup
-- **Versions Folder**: `migrations/versions/` - Contains all migration scripts
-
-**Migration Workflow:**
-
-1. **Auto-generate migrations**: `alembic revision --autogenerate -m "description"`
-2. **Apply migrations**: `alembic upgrade head`
-3. **Check current version**: `alembic current`
-4. **View migration history**: `alembic history`
+- `POST /notifications` - Upload standard notification data
+- `GET /notifications` - Get paginated list of all notifications
+- `GET /notifications/byPackage/{package_name}` - Get notifications filtered by app package
+- `POST /notifications/rel` - Upload "Relevant Info" for analysis (triggers detection pipeline)
+- `GET /notifications/rel` - List all uploaded relevant info
+- `DELETE /notifications/rel` - Clear all relevant info data
 
 ## SQL Models Overview
 
-### SMS Message Table
+All models use UUID v4 for primary keys to ensure uniqueness.
 
-Stores SMS message data for phishing analysis.
+### SMS Message Table (`SmsMessage`)
 
-| Column           | Type    | Constraints | Description           |
-| ---------------- | ------- | ----------- | --------------------- |
+| Column         | Type    | Constraints | Description           |
+| -------------- | ------- | ----------- | --------------------- |
 | `id`           | STRING  | PRIMARY KEY | UUID v4 identifier    |
 | `phone_number` | STRING  | NOT NULL    | Sender's phone number |
 | `body`         | STRING  | NULLABLE    | SMS message content   |
-| `timestamp`    | INTEGER | NULLABLE    | android sms timestamp |
+| `timestamp`    | INTEGER | NULLABLE    | Android SMS timestamp |
 
-**Purpose**: Tracks SMS messages received by users to analyze potential phishing attempts (in the future).
+### Notification Table (`Notification`)
 
-### Notification Table
+| Column        | Type    | Constraints | Description                  |
+| ------------- | ------- | ----------- | ---------------------------- |
+| `id`          | STRING  | PRIMARY KEY | UUID v4 identifier           |
+| `title`       | STRING  | NOT NULL    | Notification title           |
+| `body`        | STRING  | NULLABLE    | Notification content         |
+| `timestamp`   | INTEGER | NULLABLE    | Unix timestamp               |
+| `packageName` | STRING  | NULLABLE    | Android package name         |
+| `extraTitle`  | STRING  | NULLABLE    | Additional title info        |
+| `isGroup`     | BOOLEAN | NULLABLE    | Flag for group notifications |
 
-Stores Android notification data for security monitoring.
+### Relevant Info Table (`ReleventInfo`)
 
-| Column          | Type    | Constraints | Description                                              |
-| --------------- | ------- | ----------- | -------------------------------------------------------- |
-| `id`          | STRING  | PRIMARY KEY | UUID v4 identifier                                       |
-| `title`       | STRING  | NOT NULL    | Notification title                                       |
-| `body`        | STRING  | NULLABLE    | Notification content/message                             |
-| `timestamp`   | INTEGER | NULLABLE    | notification reciving time Unix timestamp               |
-| `packageName` | STRING  | NULLABLE    | Android app package name that generated the notification |
-
-**Purpose**: Monitors Android notifications to detect suspicious app behavior and potential phishing notifications (in the future).
-
-- Both models use UUID v4 for primary keys to ensure uniqueness across distributed systems
-
-### Todo
-
-- add an endpint to get notiffications by package name
-- improving logic and security
+| Column        | Type   | Constraints | Description                         |
+| ------------- | ------ | ----------- | ----------------------------------- |
+| `id`          | STRING | PRIMARY KEY | UUID v4 identifier                  |
+| `body`        | STRING | NULLABLE    | Content to analyze                  |
+| `packageName` | STRING | NULLABLE    | Source package                      |
+| `hash`        | STRING | NULLABLE    | Unique hash of the content          |
+| `urls`        | JSON   | NULLABLE    | List of URLs extracted from content |
