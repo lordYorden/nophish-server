@@ -2,19 +2,36 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379" # No host port needed, Testcontainers will pick a random one
+      - "6379"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: nophish
+      POSTGRES_PASSWORD: nophish
+      POSTGRES_DB: nophish
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
   worker:
     image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
     environment:
+      - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
+      - DATABASE_URL=postgresql+psycopg://nophish:nophish@postgres:5432/nophish
       - UV_PROJECT_ENVIRONMENT=/venv
+      - HF_HOME=/app/.hf_cache # cache HuggingFace models in the mounted project volume
     volumes:
       - .:/app
       - /venv
       - /app/.venv
     working_dir: /app
-    # uv run automatically syncs the environment based on pyproject.toml
-    command: uv run arq app.detectors.tasks.WorkerSettings
+    command: uv run arq app.detectors.tasks.WorkerSettings --verbose
     depends_on:
       - redis
+      - postgres
+
+volumes:
+  pgdata:
