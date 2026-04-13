@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# HuggingFace model cache (can be very large – mount as a volume instead)
+.hf_cache/
+
+# Secrets & local config
+serviceKey.json
+.env
+*.env
+
+# Dev / test artefacts
+*.sqlite
+db.sqlite3
+db.sqlite3-journal
+
+# Git
+.git/
+.gitignore
+
+# IDE / editor
+.vscode/
+.idea/
+*.code-snippets
+
+# Docker
+Dockerfile*
+compose.yml
+.dockerignore
+
+# Misc
+*.log
+ngrok.exe

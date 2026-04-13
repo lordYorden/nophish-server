@@ -16,22 +16,21 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   worker:
-    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     environment:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
       - DATABASE_URL=postgresql+psycopg://nophish:nophish@postgres:5432/nophish
-      - UV_PROJECT_ENVIRONMENT=/venv
-      - HF_HOME=/app/.hf_cache # cache HuggingFace models in the mounted project volume
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/serviceKey.json
     volumes:
-      - .:/app
-      - /venv
-      - /app/.venv
-    working_dir: /app
-    command: uv run arq app.detectors.tasks.WorkerSettings --verbose
+      - hf_cache:/app/.hf_cache   # persist downloaded HuggingFace models
+      - ./serviceKey.json:/run/secrets/serviceKey.json:ro  # injected at runtime, never in the image
     depends_on:
       - redis
       - postgres
 
 volumes:
   pgdata:
+  hf_cache:

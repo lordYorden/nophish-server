@@ -12,7 +12,7 @@ from fcm.firebase import initialize_firebase
 from pgvec.distance import get_closest_distance
 
 CONFIDENCE_THRESHOLD = 0.7
-SIMILARITY_THRESHOLD = 0.15  # cosine distance; lower = more similar
+SIMILARITY_THRESHOLD = 0.15 
 
 initialize_firebase()
 
@@ -24,8 +24,8 @@ async def run_llm_and_decide(notif: ReleventInfo) -> bool:
 
 
 async def module_b(notif: ReleventInfo) -> bool:
-    await asyncio.sleep(2)
-    return False
+    # await asyncio.sleep(2)
+    return True
 
 
 async def module_url_embedding(notif: ReleventInfo) -> bool:
@@ -71,7 +71,7 @@ async def aggregate_and_act(results, notif: ReleventInfo):
             topic="test_topic",
             title="Phishing Alert",
             body="A notification has been flagged as phishing.",
-            data={"test": notif.packageName}
+            data={"data" : notif.model_dump_json(include={"urls", "packageName", "body"})}
         )
 
 

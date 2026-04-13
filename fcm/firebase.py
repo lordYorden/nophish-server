@@ -1,9 +1,11 @@
+import os
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import messaging
 
-def initialize_firebase():      
-    cred = credentials.Certificate("serviceKey.json")
+def initialize_firebase():
+    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "serviceKey.json")
+    cred = credentials.Certificate(key_path)
     firebase_admin.initialize_app(cred)
 
 def send_fcm_message(topic: str, title: str, body: str, data: dict = None):
