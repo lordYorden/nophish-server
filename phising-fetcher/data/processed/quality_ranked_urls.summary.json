@@ -1,0 +1,22 @@
+{
+  "input_url_records": 28976,
+  "selected_url_records": 20600,
+  "max_per_domain": 5,
+  "unique_domains_selected": 14111,
+  "output": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\quality_ranked_urls.jsonl",
+  "slim_output": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\quality_ranked_urls_sources.jsonl",
+  "top_sources": [
+    [
+      "urlhaus_recent",
+      19431
+    ],
+    [
+      "phishstats",
+      878
+    ],
+    [
+      "openphish",
+      291
+    ]
+  ]
+}
