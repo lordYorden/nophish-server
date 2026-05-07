@@ -10,19 +10,33 @@ client = OpenAI(
     api_key=os.getenv("OPEN_ROUTER_KEY"),
 )
 
+_embed_model = None
+
+def get_embed_model():
+    global _embed_model
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embed_model = SentenceTransformer(model_name_or_path=os.getenv("EMBED_MODEL"))
+    return _embed_model
+
+def get_url_embedding(url: str) -> list[float]:
+    """Return a normalised embedding vector for the given URL string."""
+    model = get_embed_model()
+    return model.encode(url, normalize_embeddings=True).tolist()
+
 def ask_llm(message: str) -> ChatCompletion:
     response = client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),
         messages=[
             {
-                "role": "system", 
+                "role": "system",
                 "content": """your job is to guess if the following message is a phishing message or not.
                 the messages come from someone phone, In both English and Hebrew. and can be from any app.
 
                 answer only in the following format: {"confidence":<confidence_score>"}"""
             },
             {
-                "role": "user", 
+                "role": "user",
                 "content": f"is this a phishing message?\n{message}"
             }
         ]
@@ -53,8 +67,7 @@ def check_message_with_llm(message: str):
     confidence = parse_llm_response(response)
 
     return confidence >= CONFIDENCE_THRESHOLD, confidence
-    
-    
+       
 def main():
     phish_msg = """wel01.us/r/rest05 WELLS FARGO(CS):Profile locked because of unusual activities, kindly restore.Reply STOP to unsubscribe"""
     regular_msg = """שלום, הזמנתך מס׳ 259 מGiraffe רמת החייל מוכנה. מהיום אפשר להזמין באפליקציה שלנו ולהתחיל לצבור הטבות במועדון הלקוחות! נכנסים לעמוד המסעדה באפליקציית NONO-GROUP להורדה: https://tbit.be/nKoiVz"""

@@ -1,0 +1,112 @@
+{
+  "input_existing_urls": 28976,
+  "input_urlscan_urls": 701,
+  "selected_urls": 281,
+  "unique_domains": 226,
+  "max_per_domain_requested": 5,
+  "max_per_domain_observed": 5,
+  "categories": [
+    [
+      "delivery",
+      153
+    ],
+    [
+      "banking",
+      41
+    ],
+    [
+      "telecom",
+      31
+    ],
+    [
+      "municipal_payment",
+      15
+    ],
+    [
+      "government",
+      10
+    ],
+    [
+      "credit_card",
+      10
+    ],
+    [
+      "health",
+      9
+    ],
+    [
+      "benefits",
+      7
+    ],
+    [
+      "toll",
+      5
+    ]
+  ],
+  "targets": [
+    [
+      "Israel Post delivery",
+      153
+    ],
+    [
+      "Bank Hapoalim",
+      34
+    ],
+    [
+      "Arnona municipal payment",
+      15
+    ],
+    [
+      "Cellcom",
+      13
+    ],
+    [
+      "Pelephone",
+      11
+    ],
+    [
+      "Israeli government services",
+      10
+    ],
+    [
+      "National Insurance",
+      7
+    ],
+    [
+      "Discount Bank",
+      7
+    ],
+    [
+      "Isracard",
+      7
+    ],
+    [
+      "Bezeq",
+      7
+    ],
+    [
+      "Highway 6 toll",
+      5
+    ],
+    [
+      "Clalit health services",
+      5
+    ],
+    [
+      "Meuhedet health services",
+      4
+    ],
+    [
+      "MAX credit card",
+      3
+    ]
+  ],
+  "sources": [
+    [
+      "urlscan_public_search",
+      281
+    ]
+  ],
+  "rich_output": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\israel_elderly_relevant_urls.jsonl",
+  "slim_output": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\israel_elderly_urls_sources.jsonl"
+}

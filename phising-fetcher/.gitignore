@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+# Raw threat-intel downloads are reproducible and can be bulky.
+data/raw/
+
+# Large intermediate datasets kept locally after research runs.
+data/processed/defanged_indicators.txt
+data/processed/phishing_domains.txt
+data/processed/phishing_indicators.csv
+data/processed/phishing_indicators.jsonl
+data/processed/phishing_urls.txt
+data/processed/phishing_urls_sources.jsonl
+data/processed/quality_ranked_urls.jsonl

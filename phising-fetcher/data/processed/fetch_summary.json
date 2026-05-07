@@ -1,0 +1,47 @@
+{
+  "fetched_at": "2026-05-05T06:49:57+00:00",
+  "selected_sources": [
+    "openphish",
+    "cert_pl",
+    "phishstats",
+    "urlhaus_recent"
+  ],
+  "source_results": [
+    {
+      "source": "openphish",
+      "status": "ok",
+      "raw_path": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\raw\\20260505T064943Z_openphish.txt",
+      "records": 300
+    },
+    {
+      "source": "cert_pl",
+      "status": "ok",
+      "raw_path": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\raw\\20260505T064944Z_cert_pl.txt",
+      "records": 133685
+    },
+    {
+      "source": "phishstats",
+      "status": "partial",
+      "raw_path": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\raw\\20260505T064950Z_phishstats.json",
+      "records": 900,
+      "reason": "page 10: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "source": "urlhaus_recent",
+      "status": "ok",
+      "raw_path": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\raw\\20260505T064952Z_urlhaus_recent.csv",
+      "records": 27797
+    }
+  ],
+  "total_records_before_dedupe": 162682,
+  "total_records_after_dedupe": 162661,
+  "url_records": 28976,
+  "domain_records": 133685,
+  "outputs": {
+    "jsonl": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\phishing_indicators.jsonl",
+    "csv": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\phishing_indicators.csv",
+    "urls": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\phishing_urls.txt",
+    "domains": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\phishing_domains.txt",
+    "defanged": "C:\\First Degree\\fourth year\\NoPhish\\nophish-server\\phising-fetcher\\data\\processed\\defanged_indicators.txt"
+  }
+}

@@ -12,6 +12,9 @@ serviceKey.json
 *.sqlite
 ngrok.exe
 
+# HuggingFace model cache (downloaded by sentence-transformers worker)
+.hf_cache/
+
 # C extensions
 *.so
 
