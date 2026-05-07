@@ -59,6 +59,13 @@ async def aggregate_and_act(results, notif: ReleventInfo):
     if phishing_votes >= 2:
         print("Notification flagged as phishing by majority. Indexing URLs and alerting.")
 
+        send_fcm_message(
+            topic="test_topic",
+            title="Phishing Alert",
+            body="A notification has been flagged as phishing.",
+            data={"data" : notif.model_dump_json(include={"urls", "packageName", "body"})}
+        )
+
         if notif.urls:
             with Session(get_engine()) as session:
                 for url in notif.urls:
@@ -66,13 +73,6 @@ async def aggregate_and_act(results, notif: ReleventInfo):
                     session.add(MaliciousUrl(url=url, embedding=embedding))
                 session.commit()
             print(f"Indexed {len(notif.urls)} malicious URL(s) in Postgres.")
-
-        send_fcm_message(
-            topic="test_topic",
-            title="Phishing Alert",
-            body="A notification has been flagged as phishing.",
-            data={"data" : notif.model_dump_json(include={"urls", "packageName", "body"})}
-        )
 
 
 async def detector_pipeline(ctx, data: ReleventInfo):
