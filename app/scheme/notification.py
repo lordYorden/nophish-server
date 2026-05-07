@@ -36,7 +36,7 @@ class BaseReleventInfo(SQLModel):
     eventId: str
     sourceUserId: str
     packageName: str
-    timestamp: int
+    timestamp: int = Field(sa_column=Column(BigInteger, nullable=False))
     contentHash: str
 
 
