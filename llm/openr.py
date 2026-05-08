@@ -62,7 +62,7 @@ def check_message_with_llm(message: str, package_name: str):
         response = ask_llm(message, package_name)
     except Exception as e:
         print("Error communicating with LLM:", e)
-        return 0.0
+        return False, 0.0
     
     confidence = parse_llm_response(response)
 
@@ -78,7 +78,7 @@ def main():
 
 snip.ly/kivish6-payment"""
 
-    is_phish, confidence = check_message_with_llm(jerbi_msg)
+    is_phish, confidence = check_message_with_llm(jerbi_msg, "demo.package")
     if is_phish:
         print(f"The message is likely a phishing attempt. confidence: {confidence}")
     else:
