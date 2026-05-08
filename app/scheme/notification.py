@@ -38,6 +38,7 @@ class BaseReleventInfo(SQLModel):
     packageName: str
     timestamp: int = Field(sa_column=Column(BigInteger, nullable=False))
     contentHash: str
+    alerted: bool = False
 
 
 class ReleventInfo(BaseReleventInfo, table=True):

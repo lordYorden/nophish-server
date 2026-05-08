@@ -3,10 +3,10 @@ import logging
 import os
 from arq.connections import RedisSettings
 from sqlmodel import Session, select
-from sqlalchemy import func
+from sqlalchemy import func, update
 from llm.openr import check_message_with_llm, get_url_embedding
 from fcm.firebase import send_fcm_message
-from app.scheme.notification import NotificationSubmission
+from app.scheme.notification import NotificationSubmission, ReleventInfo
 from app.scheme.malicious_url import MaliciousUrl
 from app.database import get_engine
 from fcm.firebase import initialize_firebase
@@ -21,6 +21,18 @@ initialize_firebase()
 
 def get_existing_malicious_url(session: Session, url: str) -> MaliciousUrl | None:
     return session.exec(select(MaliciousUrl).where(MaliciousUrl.url == url)).first()
+
+
+def mark_event_alerted(event_id: str) -> bool:
+    with Session(get_engine()) as session:
+        result = session.exec(
+            update(ReleventInfo)
+            .where(ReleventInfo.eventId == event_id)
+            .where(ReleventInfo.alerted.is_(False))
+            .values(alerted=True)
+        )
+        session.commit()
+        return result.rowcount == 1
 
 
 async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
@@ -95,6 +107,14 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
     )
 
     if phishing_votes >= 2:
+        if not mark_event_alerted(notif.eventId):
+            logger.info(
+                "Skipping duplicate malicious alert: eventId=%s timestamp=%s",
+                notif.eventId,
+                notif.timestamp,
+            )
+            return
+
         try:
             send_fcm_message(
                 topic="test_topic",
