@@ -24,7 +24,7 @@ def get_url_embedding(url: str) -> list[float]:
     model = get_embed_model()
     return model.encode(url, normalize_embeddings=True).tolist()
 
-def ask_llm(message: str) -> ChatCompletion:
+def ask_llm(message: str, package_name: str) -> ChatCompletion:
     response = client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),
         messages=[
@@ -37,7 +37,7 @@ def ask_llm(message: str) -> ChatCompletion:
             },
             {
                 "role": "user",
-                "content": f"is this a phishing message?\n{message}"
+                "content": f"is this a phishing message? coming from {package_name}\n{message}"
             }
         ]
     )
@@ -54,12 +54,12 @@ def parse_llm_response(response: ChatCompletion):
     except (json.JSONDecodeError, ValueError, TypeError):
         return 0.0
     
-def check_message_with_llm(message: str):
+def check_message_with_llm(message: str, package_name: str):
     response = None  
     CONFIDENCE_THRESHOLD = 0.7
 
     try:
-        response = ask_llm(message)
+        response = ask_llm(message, package_name)
     except Exception as e:
         print("Error communicating with LLM:", e)
         return 0.0

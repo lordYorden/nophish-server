@@ -20,7 +20,7 @@ initialize_firebase()
 
 
 async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
-    is_phish, confidence = check_message_with_llm(notif.body)
+    is_phish, confidence = check_message_with_llm(notif.body, notif.packageName)
     
     logger.info(
         "LLM decision: eventId=%s sourceUserId=%s packageName=%s timestamp=%s verdict=%s confidence=%s",
