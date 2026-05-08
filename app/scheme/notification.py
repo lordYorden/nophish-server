@@ -33,7 +33,7 @@ class NotificationAccepted(SQLModel):
 
 
 class BaseReleventInfo(SQLModel):
-    eventId: str
+    eventId: str = Field(unique=True)
     sourceUserId: str
     packageName: str
     timestamp: int = Field(sa_column=Column(BigInteger, nullable=False))

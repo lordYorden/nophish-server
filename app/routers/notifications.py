@@ -2,6 +2,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, delete
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlmodel import paginate
@@ -74,8 +75,17 @@ async def upload_relevant_info(
         timestamp=to_upload.timestamp,
         contentHash=to_upload.contentHash,
     )
-    session.add(notif)
-    session.commit()
+    try:
+        session.add(notif)
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        logger.warning(
+            "Notification submission denied due to integrity error: eventId=%s error=%s",
+            to_upload.eventId,
+            str(exc.orig) if exc.orig else str(exc),
+        )
+        return NotificationAccepted(accepted=False, eventId=to_upload.eventId)
     session.refresh(notif)
 
     try:
