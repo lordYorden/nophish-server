@@ -60,11 +60,8 @@ async def upload_relevant_info(
 
     if existing_notif:
         logger.info(
-            "Duplicate notification submission ignored: eventId=%s sourceUserId=%s packageName=%s timestamp=%s",
+            "Duplicate notification submission ignored: eventId=%s",
             to_upload.eventId,
-            to_upload.sourceUserId,
-            to_upload.packageName,
-            to_upload.timestamp,
         )
         return NotificationAccepted(accepted=False, eventId=to_upload.eventId)
 
@@ -91,21 +88,15 @@ async def upload_relevant_info(
         session.delete(notif)
         session.commit()
         logger.error(
-            "Failed to enqueue notification analysis: eventId=%s sourceUserId=%s packageName=%s timestamp=%s error=%s",
+            "Failed to enqueue notification analysis: eventId=%s error=%s",
             to_upload.eventId,
-            to_upload.sourceUserId,
-            to_upload.packageName,
-            to_upload.timestamp,
             type(exc).__name__,
         )
         raise HTTPException(status_code=503, detail="Analysis queue unavailable") from exc
 
     logger.info(
-        "Accepted notification analysis: eventId=%s sourceUserId=%s packageName=%s timestamp=%s",
+        "Accepted notification analysis: eventId=%s",
         to_upload.eventId,
-        to_upload.sourceUserId,
-        to_upload.packageName,
-        to_upload.timestamp,
     )
     return NotificationAccepted(accepted=True, eventId=to_upload.eventId)
 

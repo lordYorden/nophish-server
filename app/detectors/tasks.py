@@ -27,10 +27,8 @@ async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
     is_phish, confidence = check_message_with_llm(notif.body, notif.packageName)
     
     logger.info(
-        "LLM decision: eventId=%s sourceUserId=%s packageName=%s timestamp=%s verdict=%s confidence=%s",
+        "LLM decision: eventId=%s timestamp=%s verdict=%s confidence=%s",
         notif.eventId,
-        notif.sourceUserId,
-        notif.packageName,
         notif.timestamp,
         "malicious" if is_phish else "benign",
         confidence,
@@ -56,12 +54,9 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
         for url in notif.urls:
             if get_existing_malicious_url(session, url):
                 logger.info(
-                    "URL exactly matched a known malicious URL: eventId=%s sourceUserId=%s packageName=%s timestamp=%s url=%s",
+                    "URL exactly matched a known malicious URL: eventId=%s timestamp=%s",
                     notif.eventId,
-                    notif.sourceUserId,
-                    notif.packageName,
                     notif.timestamp,
-                    url,
                 )
                 return True
 
@@ -71,20 +66,16 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
 
             if dist < SIMILARITY_THRESHOLD:
                 logger.info(
-                    "URL matched a known malicious URL: eventId=%s sourceUserId=%s packageName=%s timestamp=%s distance=%.4f",
+                    "URL matched a known malicious URL: eventId=%s timestamp=%s distance=%.4f",
                     notif.eventId,
-                    notif.sourceUserId,
-                    notif.packageName,
                     notif.timestamp,
                     dist,
                 )
                 return True
 
             logger.info(
-                "URL did not match known malicious URLs: eventId=%s sourceUserId=%s packageName=%s timestamp=%s distance=%.4f",
+                "URL did not match known malicious URLs: eventId=%s timestamp=%s distance=%.4f",
                 notif.eventId,
-                notif.sourceUserId,
-                notif.packageName,
                 notif.timestamp,
                 dist,
             )
@@ -96,10 +87,8 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
     phishing_votes = sum(1 for result in results if result)
     
     logger.info(
-        "Aggregated notification verdict: eventId=%s sourceUserId=%s packageName=%s timestamp=%s verdict=%s votes=%s/3",
+        "Aggregated notification verdict: eventId=%s timestamp=%s verdict=%s votes=%s/3",
         notif.eventId,
-        notif.sourceUserId,
-        notif.packageName,
         notif.timestamp,
         "malicious" if phishing_votes >= 2 else "benign",
         phishing_votes,
@@ -115,10 +104,8 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
             )
         except Exception as exc:
             logger.error(
-                "Failed to send malicious FCM payload: eventId=%s sourceUserId=%s packageName=%s timestamp=%s error=%s",
+                "Failed to send malicious FCM payload: eventId=%s timestamp=%s error=%s",
                 notif.eventId,
-                notif.sourceUserId,
-                notif.packageName,
                 notif.timestamp,
                 type(exc).__name__,
             )
@@ -134,10 +121,8 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
                     session.add(MaliciousUrl(url=url, embedding=embedding))
                 session.commit()
             logger.info(
-                "Processed malicious URLs for indexing: eventId=%s sourceUserId=%s packageName=%s timestamp=%s count=%s",
+                "Processed malicious URLs for indexing: eventId=%s timestamp=%s count=%s",
                 notif.eventId,
-                notif.sourceUserId,
-                notif.packageName,
                 notif.timestamp,
                 len(notif.urls),
             )
@@ -153,11 +138,9 @@ async def detector_pipeline(ctx, notif: NotificationSubmission):
     )
 
     logger.info(
-        "Processing notification analysis job: jobId=%s eventId=%s sourceUserId=%s packageName=%s timestamp=%s",
+        "Processing notification analysis job: jobId=%s eventId=%s timestamp=%s",
         ctx["job_id"],
         notif.eventId,
-        notif.sourceUserId,
-        notif.packageName,
         notif.timestamp,
     )
 
