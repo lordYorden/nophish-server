@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 initialize_firebase()
 
 
+def get_existing_malicious_url(session: Session, url: str) -> MaliciousUrl | None:
+    return session.exec(select(MaliciousUrl).where(MaliciousUrl.url == url)).first()
+
+
 async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
     is_phish, confidence = check_message_with_llm(notif.body, notif.packageName)
     
@@ -50,6 +54,17 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
             return True #TOOD: change to false after testing
 
         for url in notif.urls:
+            if get_existing_malicious_url(session, url):
+                logger.info(
+                    "URL exactly matched a known malicious URL: eventId=%s sourceUserId=%s packageName=%s timestamp=%s url=%s",
+                    notif.eventId,
+                    notif.sourceUserId,
+                    notif.packageName,
+                    notif.timestamp,
+                    url,
+                )
+                return True
+
             embedding = get_url_embedding(url)
 
             dist = get_closest_distance(embedding)
@@ -112,11 +127,14 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
         if notif.urls:
             with Session(get_engine()) as session:
                 for url in notif.urls:
+                    if get_existing_malicious_url(session, url):
+                        continue
+
                     embedding = get_url_embedding(url)
                     session.add(MaliciousUrl(url=url, embedding=embedding))
                 session.commit()
             logger.info(
-                "Indexed malicious URLs: eventId=%s sourceUserId=%s packageName=%s timestamp=%s count=%s",
+                "Processed malicious URLs for indexing: eventId=%s sourceUserId=%s packageName=%s timestamp=%s count=%s",
                 notif.eventId,
                 notif.sourceUserId,
                 notif.packageName,
