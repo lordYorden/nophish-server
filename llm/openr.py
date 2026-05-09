@@ -1,11 +1,13 @@
-from openai import OpenAI
+import asyncio
+
+from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 from dotenv import load_dotenv
 import os
 import json
 
 load_dotenv()
-client = OpenAI(
+client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPEN_ROUTER_KEY"),
 )
@@ -24,8 +26,8 @@ def get_url_embedding(url: str) -> list[float]:
     model = get_embed_model()
     return model.encode(url, normalize_embeddings=True).tolist()
 
-def ask_llm(message: str, package_name: str) -> ChatCompletion:
-    response = client.chat.completions.create(
+async def ask_llm(message: str, package_name: str) -> ChatCompletion:
+    response = await client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),
         messages=[
             {
@@ -54,12 +56,11 @@ def parse_llm_response(response: ChatCompletion):
     except (json.JSONDecodeError, ValueError, TypeError):
         return 0.0
     
-def check_message_with_llm(message: str, package_name: str):
-    response = None  
+async def check_message_with_llm(message: str, package_name: str):
     CONFIDENCE_THRESHOLD = 0.7
 
     try:
-        response = ask_llm(message, package_name)
+        response = await ask_llm(message, package_name)
     except Exception as e:
         print("Error communicating with LLM:", e)
         return False, 0.0
@@ -68,7 +69,7 @@ def check_message_with_llm(message: str, package_name: str):
 
     return confidence >= CONFIDENCE_THRESHOLD, confidence
        
-def main():
+async def main():
     phish_msg = """wel01.us/r/rest05 WELLS FARGO(CS):Profile locked because of unusual activities, kindly restore.Reply STOP to unsubscribe"""
     regular_msg = """שלום, הזמנתך מס׳ 259 מGiraffe רמת החייל מוכנה. מהיום אפשר להזמין באפליקציה שלנו ולהתחיל לצבור הטבות במועדון הלקוחות! נכנסים לעמוד המסעדה באפליקציית NONO-GROUP להורדה: https://tbit.be/nKoiVz"""
 
@@ -78,11 +79,11 @@ def main():
 
 snip.ly/kivish6-payment"""
 
-    is_phish, confidence = check_message_with_llm(jerbi_msg, "demo.package")
+    is_phish, confidence = await check_message_with_llm(jerbi_msg, "whatsapp.com")
     if is_phish:
         print(f"The message is likely a phishing attempt. confidence: {confidence}")
     else:
         print(f"The message is likely safe. confidence: {confidence}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

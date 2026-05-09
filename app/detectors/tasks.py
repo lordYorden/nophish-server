@@ -36,7 +36,7 @@ def mark_event_alerted(event_id: str) -> bool:
 
 
 async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
-    is_phish, confidence = check_message_with_llm(notif.body, notif.packageName)
+    is_phish, confidence = await check_message_with_llm(notif.body, notif.packageName)
     
     logger.info(
         "LLM decision: eventId=%s timestamp=%s verdict=%s confidence=%s",
