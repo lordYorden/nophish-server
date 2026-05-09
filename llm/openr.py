@@ -26,6 +26,9 @@ def get_url_embedding(url: str) -> list[float]:
     model = get_embed_model()
     return model.encode(url, normalize_embeddings=True).tolist()
 
+async def get_url_embedding_async(url: str) -> list[float]:
+    return await asyncio.to_thread(get_url_embedding, url)
+
 async def ask_llm(message: str, package_name: str) -> ChatCompletion:
     response = await client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),

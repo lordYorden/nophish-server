@@ -4,7 +4,7 @@ import os
 from arq.connections import RedisSettings
 from sqlmodel import Session, select
 from sqlalchemy import func, update
-from llm.openr import check_message_with_llm, get_url_embedding
+from llm.openr import check_message_with_llm, get_url_embedding_async
 from fcm.firebase import send_fcm_message
 from app.scheme.notification import NotificationSubmission, ReleventInfo
 from app.scheme.malicious_url import MaliciousUrl
@@ -72,7 +72,7 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
                 )
                 return True
 
-            embedding = get_url_embedding(url)
+            embedding = await get_url_embedding_async(url)
 
             dist = get_closest_distance(embedding)
 
@@ -137,7 +137,7 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
                     if get_existing_malicious_url(session, url):
                         continue
 
-                    embedding = get_url_embedding(url)
+                    embedding = await get_url_embedding_async(url)
                     session.add(MaliciousUrl(url=url, embedding=embedding))
                 session.commit()
             logger.info(
