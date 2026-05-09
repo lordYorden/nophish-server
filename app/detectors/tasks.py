@@ -10,7 +10,7 @@ from app.scheme.notification import NotificationSubmission, ReleventInfo
 from app.scheme.malicious_url import MaliciousUrl
 from app.database import get_engine
 from fcm.firebase import initialize_firebase
-from pgvec.distance import get_closest_distance
+from pgvec.distance import get_closest_distance_async
 
 CONFIDENCE_THRESHOLD = 0.7
 SIMILARITY_THRESHOLD = 0.15 
@@ -74,7 +74,7 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
 
             embedding = await get_url_embedding_async(url)
 
-            dist = get_closest_distance(embedding)
+            dist = await get_closest_distance_async(embedding)
 
             if dist < SIMILARITY_THRESHOLD:
                 logger.info(
