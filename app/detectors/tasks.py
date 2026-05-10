@@ -115,21 +115,12 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
             )
             return
 
-        try:
-            send_fcm_message(
-                topic="test_topic",
-                title="Phishing Alert",
-                body="A notification has been flagged as phishing.",
-                data={"data": notif.model_dump_json(exclude_none=True)},
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to send malicious FCM payload: eventId=%s timestamp=%s error=%s",
-                notif.eventId,
-                notif.timestamp,
-                type(exc).__name__,
-            )
-            raise
+        send_fcm_message(
+            topic="test_topic",
+            title="Phishing Alert",
+            body="A notification has been flagged as phishing.",
+            data={"data": notif.model_dump_json(exclude_none=True)},
+        )
 
         if notif.urls:
             with Session(get_engine()) as session:
