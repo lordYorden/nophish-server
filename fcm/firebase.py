@@ -10,10 +10,6 @@ def initialize_firebase():
 
 def send_fcm_message(topic: str, title: str, body: str, data: dict = None):
     message = messaging.Message(
-        notification=messaging.Notification(
-            title=title,
-            body=body
-        ),
         data=data or {},
         topic=topic,
 

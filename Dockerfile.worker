@@ -32,4 +32,4 @@ ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/app/.hf_cache
 
 # The ARQ worker is the only entrypoint for this image
-CMD ["uv", "run", "arq", "app.detectors.tasks.WorkerSettings", "--verbose"]
+CMD ["uv", "run", "arq", "app.detectors.tasks.WorkerSettings", "--verbose", "--custom-log-dict", "app.logging_config.LOGGING_CONFIG"]
