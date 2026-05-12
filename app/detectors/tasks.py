@@ -56,13 +56,14 @@ async def module_b(notif: NotificationSubmission) -> bool:
 async def module_url_embedding(notif: NotificationSubmission) -> bool:
     """Check if any URL in the message is similar to a known malicious URL via pgvector cosine distance."""
     if not notif.urls:
-        return False
-
+        return False #if the message dosen't contain any URLs, we can assume it's not phising
+    
     with Session(get_engine()) as session:
         count = session.exec(select(func.count(MaliciousUrl.id))).one()
         if count == 0:
-            return True #TOOD: change to false after testing
+            return True #for testing if the db is empty then flag the message for embedding and indexing
 
+        #check for known malicious URLs
         for url in notif.urls:
             if get_existing_malicious_url(session, url):
                 logger.info(
@@ -72,25 +73,26 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
                 )
                 return True
 
-            embedding = await get_url_embedding_async(url)
+    #check for variants
+    for url in notif.urls:
+        embedding = await get_url_embedding_async(url)
+        dist = await get_closest_distance_async(embedding)
 
-            dist = await get_closest_distance_async(embedding)
-
-            if dist < SIMILARITY_THRESHOLD:
-                logger.info(
-                    "URL matched a known malicious URL: eventId=%s timestamp=%s distance=%.4f",
-                    notif.eventId,
-                    notif.timestamp,
-                    dist,
-                )
-                return True
-
+        if dist < SIMILARITY_THRESHOLD:
             logger.info(
-                "URL did not match known malicious URLs: eventId=%s timestamp=%s distance=%.4f",
+                "URL matched a known malicious URL: eventId=%s timestamp=%s distance=%.4f",
                 notif.eventId,
                 notif.timestamp,
                 dist,
             )
+            return True
+
+        logger.info(
+            "URL did not match known malicious URLs: eventId=%s timestamp=%s distance=%.4f",
+            notif.eventId,
+            notif.timestamp,
+            dist,
+        )
 
     return False
 
@@ -131,6 +133,7 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
                     embedding = await get_url_embedding_async(url)
                     session.add(MaliciousUrl(url=url, embedding=embedding))
                 session.commit()
+            
             logger.info(
                 "Processed malicious URLs for indexing: eventId=%s timestamp=%s count=%s",
                 notif.eventId,
