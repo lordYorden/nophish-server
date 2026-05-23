@@ -17,6 +17,10 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
    Ensure `serviceKey.json` exists in the repository root. It is mounted into
    the containers at runtime and is not copied into the image.
 
+   This is a Firebase service account key, which can be downloaded from the
+   [Firebase Console](https://console.firebase.google.com/).
+
+
    If you exercise the LLM or embedding paths, provide these values through
    your shell environment or a local `.env` file:
 
@@ -25,14 +29,13 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
    LLM_MODEL=...
    EMBED_MODEL=...
    ```
-
 2. **Run the stack**
 
    ```bash
    docker compose up --build
    ```
-
 3. **Access the API**
+
    - API Base URL: `http://localhost:8000`
    - Interactive API Documentation: `http://localhost:8000/docs`
 
@@ -46,7 +49,6 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 - **AI Engine**: `OpenAI` (via LLM module) for message analysis
 - **Infrastructure**: `Docker Compose` for the API server, Redis, Postgres, and worker
 - **Messaging**: `Firebase Cloud Messaging (FCM)` for real-time phishing alerts
-- **Migrations**: `Alembic` for schema versioning
 - **Package Manager**: `uv`
 
 ### Detection Pipeline
@@ -81,8 +83,8 @@ All models use UUID v4 for primary keys to ensure uniqueness.
 
 ### SMS Message Table (`SmsMessage`)
 
-| Column         | Type    | Constraints | Description           |
-| -------------- | ------- | ----------- | --------------------- |
+| Column           | Type    | Constraints | Description           |
+| ---------------- | ------- | ----------- | --------------------- |
 | `id`           | STRING  | PRIMARY KEY | UUID v4 identifier    |
 | `phone_number` | STRING  | NOT NULL    | Sender's phone number |
 | `body`         | STRING  | NULLABLE    | SMS message content   |
@@ -90,8 +92,8 @@ All models use UUID v4 for primary keys to ensure uniqueness.
 
 ### Notification Table (`Notification`)
 
-| Column        | Type    | Constraints | Description                  |
-| ------------- | ------- | ----------- | ---------------------------- |
+| Column          | Type    | Constraints | Description                  |
+| --------------- | ------- | ----------- | ---------------------------- |
 | `id`          | STRING  | PRIMARY KEY | UUID v4 identifier           |
 | `title`       | STRING  | NOT NULL    | Notification title           |
 | `body`        | STRING  | NULLABLE    | Notification content         |
@@ -102,8 +104,8 @@ All models use UUID v4 for primary keys to ensure uniqueness.
 
 ### Relevant Info Table (`ReleventInfo`)
 
-| Column        | Type   | Constraints | Description                         |
-| ------------- | ------ | ----------- | ----------------------------------- |
+| Column          | Type   | Constraints | Description                         |
+| --------------- | ------ | ----------- | ----------------------------------- |
 | `id`          | STRING | PRIMARY KEY | UUID v4 identifier                  |
 | `body`        | STRING | NULLABLE    | Content to analyze                  |
 | `packageName` | STRING | NULLABLE    | Source package                      |
