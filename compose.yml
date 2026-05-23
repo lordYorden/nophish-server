@@ -3,6 +3,11 @@ services:
     image: redis:7-alpine
     ports:
       - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -14,6 +19,32 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nophish -d nophish"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DATABASE_URL=postgresql+psycopg://nophish:nophish@postgres:5432/nophish
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/serviceKey.json
+    ports:
+      - "8000:8000"
+    volumes:
+      - hf_cache:/app/.hf_cache   # persist downloaded HuggingFace models
+      - ./serviceKey.json:/run/secrets/serviceKey.json:ro  # injected at runtime, never in the image
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   worker:
     build:
@@ -22,14 +53,17 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - DATABASE_URL=postgresql+psycopg://nophish:nophish@postgres:5432/nophish
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/serviceKey.json
     volumes:
       - hf_cache:/app/.hf_cache   # persist downloaded HuggingFace models
       - ./serviceKey.json:/run/secrets/serviceKey.json:ro  # injected at runtime, never in the image
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:

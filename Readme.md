@@ -8,33 +8,31 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 
 ### Prerequisites
 
-- Python 3.13 or higher
-- Docker (for Redis and background workers)
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Docker and Docker Compose
 
 ### Installation & Setup
 
-1. **Sync dependencies**
+1. **Prepare runtime configuration**
+
+   Ensure `serviceKey.json` exists in the repository root. It is mounted into
+   the containers at runtime and is not copied into the image.
+
+   If you exercise the LLM or embedding paths, provide these values through
+   your shell environment or a local `.env` file:
 
    ```bash
-   uv sync
+   OPEN_ROUTER_KEY=...
+   LLM_MODEL=...
+   EMBED_MODEL=...
    ```
 
-2. **Run database migrations**
+2. **Run the stack**
 
    ```bash
-   uv run alembic upgrade head
+   docker compose up --build
    ```
 
-3. **Run the server**
-
-   ```bash
-   uv run python main.py
-   ```
-
-   **Note**: The server uses `Testcontainers` to automatically manage a Redis instance and a worker container for the detection pipeline. Ensure Docker is running.
-
-4. **Access the API**
+3. **Access the API**
    - API Base URL: `http://localhost:8000`
    - Interactive API Documentation: `http://localhost:8000/docs`
 
@@ -43,10 +41,10 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 ### Architecture
 
 - **Framework**: `FastAPI` with `Pydantic`
-- **Database**: `SQLite` with `SQLModel` ORM
-- **Background Tasks**: `arq` (Redis-based job queue) for asynchronous phishing detection
+- **Database**: `Postgres` with `pgvector` and `SQLModel` ORM
+- **Background Tasks**: `arq` worker service with Redis for asynchronous phishing detection
 - **AI Engine**: `OpenAI` (via LLM module) for message analysis
-- **Infrastructure**: `Docker` integration via `Testcontainers` for seamless development
+- **Infrastructure**: `Docker Compose` for the API server, Redis, Postgres, and worker
 - **Messaging**: `Firebase Cloud Messaging (FCM)` for real-time phishing alerts
 - **Migrations**: `Alembic` for schema versioning
 - **Package Manager**: `uv`

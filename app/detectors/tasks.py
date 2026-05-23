@@ -163,4 +163,7 @@ async def detector_pipeline(ctx, notif: NotificationSubmission):
 
 class WorkerSettings:
     functions = [detector_pipeline]
-    redis_settings = RedisSettings(host=os.getenv("REDIS_HOST", "localhost"))
+    redis_settings = RedisSettings(
+        host=os.getenv("REDIS_HOST", "localhost"),
+        port=int(os.getenv("REDIS_PORT", "6379")),
+    )
