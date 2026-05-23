@@ -14,7 +14,7 @@ def get_engine():
             "DATABASE_URL",
             "postgresql+psycopg://nophish:nophish@localhost:5432/nophish",
         )
-        _engine = create_engine(url, echo=True)
+        _engine = create_engine(url, echo=False)
     return _engine
 
 

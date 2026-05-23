@@ -16,4 +16,15 @@ LOGGING_CONFIG = {
         "handlers": ["default"],
         "level": "INFO",
     },
+    "loggers": {
+        "httpx": {
+            "level": "WARNING",
+        },
+        "sqlalchemy.engine": {
+            "level": "WARNING",
+        },
+        "uvicorn.access": {
+            "level": "WARNING",
+        },
+    },
 }
