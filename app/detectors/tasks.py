@@ -11,6 +11,7 @@ from app.scheme.malicious_url import MaliciousUrl
 from app.database import get_engine
 from fcm.firebase import initialize_firebase
 from pgvec.distance import get_closest_distance_async
+from app.detectors.url_scanner import canonicalize_url_for_lookup, scan_urls
 
 CONFIDENCE_THRESHOLD = 0.7
 SIMILARITY_THRESHOLD = 0.15 
@@ -19,8 +20,22 @@ logger = logging.getLogger(__name__)
 initialize_firebase()
 
 
+def url_lookup_candidates(url: str) -> list[str]:
+    canonical_url = canonicalize_url_for_lookup(url)
+    candidates = [url]
+    if canonical_url and canonical_url != url:
+        candidates.append(canonical_url)
+    return candidates
+
+
 def get_existing_malicious_url(session: Session, url: str) -> MaliciousUrl | None:
-    return session.exec(select(MaliciousUrl).where(MaliciousUrl.url == url)).first()
+    return session.exec(
+        select(MaliciousUrl).where(MaliciousUrl.url.in_(url_lookup_candidates(url)))
+    ).first()
+
+
+def url_for_embedding(url: str) -> str:
+    return canonicalize_url_for_lookup(url) or url
 
 
 def mark_event_alerted(event_id: str) -> bool:
@@ -48,9 +63,27 @@ async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
     return is_phish
 
 
-async def module_b(notif: NotificationSubmission) -> bool:
-    # await asyncio.sleep(2)
-    return True
+async def module_dynamic_url_scanner(notif: NotificationSubmission) -> bool:
+    """Scan URLs for obfuscation, unsafe hosts, shortener redirects, and load failures."""
+    if not notif.urls:
+        return False
+
+    results = await scan_urls(notif.urls)
+    suspicious = any(result.suspicious for result in results)
+    for result in results:
+        logger.info(
+            "Dynamic URL scanner result: eventId=%s timestamp=%s verdict=%s host=%s finalHost=%s reasons=%s error=%s usedBrowser=%s",
+            notif.eventId,
+            notif.timestamp,
+            "malicious" if result.suspicious else "benign",
+            result.hostname,
+            result.final_hostname,
+            ",".join(result.reasons),
+            result.error,
+            result.used_browser,
+        )
+
+    return suspicious
 
 
 async def module_url_embedding(notif: NotificationSubmission) -> bool:
@@ -75,7 +108,7 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
 
     #check for variants
     for url in notif.urls:
-        embedding = await get_url_embedding_async(url)
+        embedding = await get_url_embedding_async(url_for_embedding(url))
         dist = await get_closest_distance_async(embedding)
 
         if dist < SIMILARITY_THRESHOLD:
@@ -127,11 +160,12 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
         if notif.urls:
             with Session(get_engine()) as session:
                 for url in notif.urls:
-                    if get_existing_malicious_url(session, url):
+                    indexed_url = url_for_embedding(url)
+                    if get_existing_malicious_url(session, indexed_url):
                         continue
 
-                    embedding = await get_url_embedding_async(url)
-                    session.add(MaliciousUrl(url=url, embedding=embedding))
+                    embedding = await get_url_embedding_async(indexed_url)
+                    session.add(MaliciousUrl(url=indexed_url, embedding=embedding))
                 session.commit()
             
             logger.info(
@@ -147,7 +181,7 @@ async def detector_pipeline(ctx, notif: NotificationSubmission):
     # Run all three modules simultaneously
     results = await asyncio.gather(
         run_llm_and_decide(notif),
-        module_b(notif),
+        module_dynamic_url_scanner(notif),
         module_url_embedding(notif),
     )
 
