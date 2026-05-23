@@ -370,10 +370,10 @@ async def _probe_html_redirect(
         return "html_redirect_suspected"
 
     text = small_response.text[:MAX_BODY_BYTES].lower()
-    if re.search(r"<meta[^>]+http-equiv=[\"']?refresh[^>]+url\\s*=", text):
+    if re.search(r"<meta[^>]+http-equiv=[\"']?refresh[^>]+url\s*=", text):
         return "html_redirect_suspected"
     if re.search(
-        r"^\\s*(?:window\\.)?location(?:\\.href|\\.replace)?\\s*=\\s*[\"']https?://",
+        r"^\s*(?:window\.)?location(?:\.href|\.replace)?\s*=\s*[\"']https?://",
         text,
         re.MULTILINE,
     ):
@@ -445,6 +445,7 @@ async def _expand_with_browser(url: str) -> UrlScanResult:
             error=type(exc).__name__,
         )
     except Exception as exc:
+        logger.warning("Browser expansion failed for %s: %s", url, exc, exc_info=True)
         return UrlScanResult(
             suspicious=True,
             reasons=["browser_failure"],
