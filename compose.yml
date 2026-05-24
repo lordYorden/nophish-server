@@ -19,8 +19,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+    init: true
+    ipc: host
     environment:
       - PYTHONUNBUFFERED=1
+      - DYNAMIC_URL_SCANNER_ENABLE_BROWSER=true
       - REDIS_HOST=redis
       - DATABASE_URL=postgresql+psycopg://nophish:nophish@postgres:5432/nophish
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/serviceKey.json

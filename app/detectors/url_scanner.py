@@ -312,13 +312,13 @@ async def _expand_http_redirects(start_url: str) -> UrlScanResult:
 
             html_probe = await _probe_html_redirect(client, current_url, response)
             if html_probe and _browser_enabled():
-                return UrlScanResult(
-                    suspicious=False,
-                    reasons=[html_probe],
-                    raw_url=start_url,
-                    final_url=current_url,
-                    redirect_chain=redirect_chain,
+                browser_result = await _expand_with_browser(current_url)
+                browser_result.raw_url = start_url
+                browser_result.redirect_chain = _unique(
+                    redirect_chain + browser_result.redirect_chain
                 )
+                browser_result.reasons = _unique([html_probe] + browser_result.reasons)
+                return browser_result
 
             return UrlScanResult(
                 suspicious=False,

@@ -21,15 +21,22 @@ WORKDIR /app
 # Copy the pre-built virtual environment from the builder stage
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy the full application source
-COPY . .
-
 # Tell uv (and Python) to use the pre-built venv
 ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 ENV PYTHONUNBUFFERED=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
 
 # HuggingFace model cache – can be overridden at runtime via a volume
 ENV HF_HOME=/app/.hf_cache
+
+# Install Chromium and the OS libraries Playwright needs at runtime.
+# Keep this in the final image because the worker is where browser scans run.
+RUN uv run playwright install --with-deps chromium
+
+# Copy the full application source after browser installation so source-only
+# edits do not invalidate the expensive Playwright browser layer.
+COPY . .
 
 # The ARQ worker is the only entrypoint for this image
 CMD ["uv", "run", "arq", "app.detectors.tasks.WorkerSettings", "--verbose", "--custom-log-dict", "app.logging_config.LOGGING_CONFIG"]

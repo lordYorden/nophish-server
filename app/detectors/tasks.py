@@ -94,7 +94,7 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
     with Session(get_engine()) as session:
         count = session.exec(select(func.count(MaliciousUrl.id))).one()
         if count == 0:
-            return True #for testing if the db is empty then flag the message for embedding and indexing
+            return False 
 
         #check for known malicious URLs
         for url in notif.urls:
