@@ -19,7 +19,7 @@ import app.scheme.notification     # noqa: F401
 import app.scheme.malicious_url    # noqa: F401
 
 compose = DockerCompose(".", compose_file_name="compose.yml")
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager

@@ -17,7 +17,7 @@ from app.scheme.notification import (
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
-logger = logging.getLogger("uvicorn.error")
+logger = logging.getLogger(__name__)
 
 @router.post("", response_model=Notification)
 async def upload_notification(to_upload: BaseNotification, session: Session = Depends(get_session)) -> Notification:
