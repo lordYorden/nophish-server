@@ -51,6 +51,9 @@ def mark_event_alerted(event_id: str) -> bool:
 
 
 async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
+    asyncio.sleep(1)
+    return True
+    
     is_phish, confidence = await check_message_with_llm(notif.body, notif.packageName)
     
     logger.info(

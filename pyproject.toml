@@ -10,6 +10,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "fastapi>=0.127.0",
     "fastapi-pagination>=0.15.4",
+    "fake-useragent>=2.2.0",
     "firebase-admin>=7.1.0",
     "httpx>=0.28.1",
     "idna>=3.11",

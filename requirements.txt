@@ -1,6 +1,7 @@
 fastapi
 sqlmodel
 fastapi_pagination
+fake-useragent
 pydantic
 uvicorn
 httpx
