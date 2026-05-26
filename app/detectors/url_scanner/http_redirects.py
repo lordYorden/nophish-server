@@ -154,7 +154,7 @@ async def probe_html_redirect(
     if re.search(r"<meta[^>]+http-equiv=[\"']?refresh[^>]+url\s*=", text):
         return "html_redirect_suspected"
     if re.search(
-        r"^\s*(?:window\.)?location(?:\.href|\.replace)?\s*=\s*[\"']https?://",
+        r"^\s*(?:window\.)?location(?:\.href)?\s*=\s*[\"']https?://|^\s*(?:window\.)?location\.replace\s*\(\s*[\"']https?://",
         text,
         re.MULTILINE,
     ):
