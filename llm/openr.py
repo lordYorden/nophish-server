@@ -37,6 +37,9 @@ async def ask_llm(message: str, package_name: str) -> ChatCompletion:
                 "role": "system",
                 "content": """your job is to guess if the following message is a phishing message or not.
                 the messages come from someone phone, In both English and Hebrew. and can be from any app.
+                if you don't see any url than maybe it's not phishing.
+                Please note that you are only responsible for the content and phrasing.
+                disregard the specific type of URL and focus only on its presence.
 
                 answer only in the following format: {"confidence":<confidence_score>}"""
             },
