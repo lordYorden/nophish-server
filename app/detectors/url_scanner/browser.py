@@ -70,6 +70,7 @@ async def expand_with_browser(url: str) -> UrlScanResult:
             )
             await page.goto(url, wait_until="domcontentloaded")
             final_url = canonicalize_url_for_lookup(page.url) or page.url
+            await page.unroute_all(behavior="ignoreErrors")
             await context.close()
             await browser.close()
     except playwright_async_api.TimeoutError as exc:
