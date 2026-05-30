@@ -92,7 +92,16 @@ async def expand_http_redirects(start_url: str) -> UrlScanResult:
                 continue
 
             html_probe = await probe_html_redirect(client, current_url, response)
-            if html_probe and browser_enabled():
+            if html_probe:
+                if not browser_enabled():
+                    return UrlScanResult(
+                        suspicious=True,
+                        reasons=[html_probe],
+                        raw_url=start_url,
+                        final_url=current_url,
+                        redirect_chain=redirect_chain,
+                    )
+
                 browser_result = await expand_with_browser(current_url)
                 browser_result.raw_url = start_url
                 browser_result.redirect_chain = unique(

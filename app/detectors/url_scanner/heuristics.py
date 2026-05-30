@@ -56,14 +56,16 @@ def has_excessive_subdomains(host: str) -> bool:
 
 
 def has_brand_token_in_wrong_domain(host: str) -> bool:
-    labels = re.split(r"[^a-z0-9]+", host.lower())
-    label_text = "-".join(labels)
+    normalized_host = host.lower().rstrip(".")
+    labels = [label for label in re.split(r"[^a-z0-9]+", normalized_host) if label]
     for brand, legitimate_suffixes in BRAND_DOMAINS.items():
-        if brand not in label_text:
+        if brand not in labels:
             continue
-        if any(host == suffix or host.endswith(f".{suffix}") for suffix in legitimate_suffixes):
-            return False
-        return True
+        if not any(
+            normalized_host == suffix or normalized_host.endswith(f".{suffix}")
+            for suffix in legitimate_suffixes
+        ):
+            return True
     return False
 
 

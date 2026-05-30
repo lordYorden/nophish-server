@@ -6,9 +6,21 @@ BROWSER_TIMEOUT_MS = 5_000
 MAX_REDIRECTS = 5
 MAX_SUBDOMAINS = 4
 MAX_BODY_BYTES = 4096
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
+)
 
 def _generate_user_agent() -> str:
-    return UserAgent(platforms="desktop", browsers=["Chrome", "Edge"]).random
+    try:
+        return UserAgent(
+            platforms="desktop",
+            browsers=["Chrome", "Edge"],
+            fallback=DEFAULT_USER_AGENT,
+        ).random
+    except Exception:
+        return DEFAULT_USER_AGENT
 
 USER_AGENT = os.getenv("DYNAMIC_URL_SCANNER_USER_AGENT") or _generate_user_agent()
 

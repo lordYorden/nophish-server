@@ -69,6 +69,8 @@ async def scan_url(raw_url: str) -> UrlScanResult:
 
 
 def should_use_browser(result: UrlScanResult) -> bool:
+    if result.used_browser:
+        return False
     if not browser_enabled():
         return False
     host = hostname(result.final_url or result.normalized_url)
