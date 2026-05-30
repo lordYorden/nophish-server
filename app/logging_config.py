@@ -24,7 +24,7 @@ LOGGING_CONFIG = {
             "level": "WARNING",
         },
         "uvicorn.access": {
-            "level": "WARNING",
+            "level": "INFO",
         },
     },
 }

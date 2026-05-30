@@ -89,4 +89,4 @@ CONFUSABLE_CODEPOINTS = {
 }
 
 def browser_enabled() -> bool:
-    return os.getenv("DYNAMIC_URL_SCANNER_ENABLE_BROWSER", "").lower() == "true"
+    return os.getenv("DYNAMIC_URL_SCANNER_ENABLE_BROWSER", "").strip().lower() == "true"

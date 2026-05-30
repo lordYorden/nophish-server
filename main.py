@@ -71,5 +71,4 @@ if __name__ == "__main__":
         port=8000,
         log_level="debug",
         log_config=LOGGING_CONFIG,
-        access_log=False,
     )
