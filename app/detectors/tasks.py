@@ -50,6 +50,10 @@ def mark_event_alerted(event_id: str) -> bool:
         return result.rowcount == 1
 
 
+def circle_topic(circle_id: str) -> str:
+    return f"circle_{circle_id}"
+
+
 async def run_llm_and_decide(notif: NotificationSubmission) -> bool:
     is_phish, confidence = await check_message_with_llm(notif.body, notif.packageName)
     
@@ -151,7 +155,7 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
             return
 
         send_fcm_message(
-            topic="test_topic",
+            topic=circle_topic(notif.circleId),
             title="Phishing Alert",
             body="A notification has been flagged as phishing.",
             data={"data": notif.model_dump_json(exclude_none=True)},
