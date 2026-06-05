@@ -1,4 +1,5 @@
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from logging.config import dictConfig
 from fastapi import FastAPI
@@ -7,6 +8,7 @@ from app.routers import messages, notifications
 from fcm.firebase import initialize_firebase
 from app.database import close_redis_pool, set_redis_settings, init_db
 from app.logging_config import LOGGING_CONFIG
+from sqlalchemy.exc import SQLAlchemyError
 import logging
 
 dictConfig(LOGGING_CONFIG)
@@ -20,6 +22,24 @@ import app.scheme.malicious_url    # noqa: F401
 logger = logging.getLogger(__name__)
 
 
+async def init_db_with_retry(max_attempts: int = 10, delay_seconds: float = 2.0):
+    for attempt in range(1, max_attempts + 1):
+        try:
+            init_db()
+            return
+        except SQLAlchemyError:
+            if attempt == max_attempts:
+                logger.exception("Postgres initialization failed")
+                raise
+            logger.warning(
+                "Postgres initialization failed; retrying in %.1f seconds (%d/%d)",
+                delay_seconds,
+                attempt,
+                max_attempts,
+            )
+            await asyncio.sleep(delay_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.debug("Starting up application")
@@ -31,7 +51,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Redis on {redis_host}:{redis_port}")
 
     # Postgres must be configured before get_engine() is called anywhere.
-    init_db()
+    await init_db_with_retry()
     logger.info("Postgres initialized")
 
     yield
