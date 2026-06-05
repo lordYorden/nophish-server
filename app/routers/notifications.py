@@ -71,6 +71,7 @@ async def upload_relevant_info(
         id=id,
         eventId=to_upload.eventId,
         sourceUserId=to_upload.sourceUserId,
+        circleId=to_upload.circleId,
         packageName=to_upload.packageName,
         timestamp=to_upload.timestamp,
         contentHash=to_upload.contentHash,
