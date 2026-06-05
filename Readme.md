@@ -32,7 +32,7 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
    uv run python main.py
    ```
 
-   **Note**: The server uses `Testcontainers` to automatically manage a Redis instance and a worker container for the detection pipeline. Ensure Docker is running.
+   **Note**: The server expects Redis and Postgres to be running separately. By default it connects to Redis at `localhost:6379` and uses `DATABASE_URL` for Postgres, falling back to `postgresql+psycopg://nophish:nophish@localhost:5432/nophish`.
 
 4. **Access the API**
    - API Base URL: `http://localhost:8000`
@@ -46,7 +46,7 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 - **Database**: `SQLite` with `SQLModel` ORM
 - **Background Tasks**: `arq` (Redis-based job queue) for asynchronous phishing detection
 - **AI Engine**: `OpenAI` (via LLM module) for message analysis
-- **Infrastructure**: `Docker` integration via `Testcontainers` for seamless development
+- **Infrastructure**: `Docker Compose` for local Redis, Postgres, and worker services
 - **Messaging**: `Firebase Cloud Messaging (FCM)` for real-time phishing alerts
 - **Migrations**: `Alembic` for schema versioning
 - **Package Manager**: `uv`
@@ -104,10 +104,15 @@ All models use UUID v4 for primary keys to ensure uniqueness.
 
 ### Relevant Info Table (`ReleventInfo`)
 
-| Column        | Type   | Constraints | Description                         |
-| ------------- | ------ | ----------- | ----------------------------------- |
-| `id`          | STRING | PRIMARY KEY | UUID v4 identifier                  |
-| `body`        | STRING | NULLABLE    | Content to analyze                  |
-| `packageName` | STRING | NULLABLE    | Source package                      |
-| `hash`        | STRING | NULLABLE    | Unique hash of the content          |
-| `urls`        | JSON   | NULLABLE    | List of URLs extracted from content |
+| Column         | Type    | Constraints | Description                         |
+| -------------- | ------- | ----------- | ----------------------------------- |
+| `id`           | STRING  | PRIMARY KEY | UUID v4 identifier                  |
+| `eventId`      | STRING  | UNIQUE      | Client event identifier             |
+| `sourceUserId` | STRING  | NOT NULL    | User that submitted the notification |
+| `circleId`     | STRING  | NOT NULL    | Circle used for FCM topic routing   |
+| `packageName`  | STRING  | NOT NULL    | Source package                      |
+| `timestamp`    | INTEGER | NOT NULL    | Android notification timestamp      |
+| `contentHash`  | STRING  | NOT NULL    | Unique hash of the content          |
+| `alerted`      | BOOLEAN | NOT NULL    | Whether an alert was already sent   |
+
+`POST /notifications/rel` requires `circleId`. Phishing alerts are sent to the FCM topic `circle_{circleId}`.

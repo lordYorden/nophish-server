@@ -7,7 +7,6 @@ from app.routers import messages, notifications
 from fcm.firebase import initialize_firebase
 from app.database import close_redis_pool, set_redis_settings, init_db
 from app.logging_config import LOGGING_CONFIG
-from testcontainers.compose import DockerCompose
 import logging
 
 dictConfig(LOGGING_CONFIG)
@@ -18,37 +17,28 @@ import app.scheme.message          # noqa: F401
 import app.scheme.notification     # noqa: F401
 import app.scheme.malicious_url    # noqa: F401
 
-compose = DockerCompose(".", compose_file_name="compose.yml")
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.debug("Starting up Postgres, Redis, and workers")
-
-    compose.start()
+    logger.debug("Starting up application")
 
     # Redis
-    redis_host = compose.get_service_host("redis", 6379)
-    redis_port = compose.get_service_port("redis", 6379)
-    await set_redis_settings(host=redis_host, port=int(redis_port))
+    redis_host = os.getenv("REDIS_HOST", "localhost")
+    redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    await set_redis_settings(host=redis_host, port=redis_port)
     logger.info(f"Redis on {redis_host}:{redis_port}")
 
-    # Postgres — must be set before get_engine() is called anywhere
-    pg_host = compose.get_service_host("postgres", 5432)
-    pg_port = compose.get_service_port("postgres", 5432)
-    os.environ["DATABASE_URL"] = (
-        f"postgresql+psycopg://nophish:nophish@{pg_host}:{pg_port}/nophish"
-    )
+    # Postgres must be configured before get_engine() is called anywhere.
     init_db()
-    logger.info(f"Postgres on {pg_host}:{pg_port}")
+    logger.info("Postgres initialized")
 
     yield
 
     await close_redis_pool()
-    compose.stop()
 
-    logger.debug("Postgres, Redis, and workers stopped")
+    logger.debug("Application stopped")
 
 
 app = FastAPI(lifespan=lifespan)
