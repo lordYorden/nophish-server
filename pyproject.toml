@@ -23,4 +23,5 @@ dependencies = [
     "sentence-transformers>=3.0.0",
     "sqlmodel>=0.0.29",
     "uvicorn>=0.40.0",
+    "cryptography>=46.0.3",
 ]

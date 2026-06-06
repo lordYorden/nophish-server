@@ -5,19 +5,12 @@ from logging.config import dictConfig
 from fastapi import FastAPI
 from fastapi_pagination import add_pagination
 from app.routers import messages, notifications
-from fcm.firebase import initialize_firebase
 from app.database import close_redis_pool, set_redis_settings, init_db
 from app.logging_config import LOGGING_CONFIG
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 
 dictConfig(LOGGING_CONFIG)
-
-# Import all SQLModel table classes so their metadata is registered
-# before init_db() calls SQLModel.metadata.create_all()
-import app.scheme.message          # noqa: F401
-import app.scheme.notification     # noqa: F401
-import app.scheme.malicious_url    # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -81,4 +74,6 @@ if __name__ == "__main__":
         port=8000,
         log_level="debug",
         log_config=LOGGING_CONFIG,
+        ssl_keyfile="key.pem",
+        ssl_certfile="cert.pem"
     )
