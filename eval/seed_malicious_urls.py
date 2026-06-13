@@ -21,6 +21,7 @@ from app.database import get_engine
 from app.detectors.url_scanner import canonicalize_url_for_lookup
 from app.scheme.malicious_url import MaliciousUrl
 from llm.openr import get_url_embedding
+from url_fuzzing import fuzz_urls
 
 DEFAULT_ENV_FILES = (
     REPO_ROOT / ".env",
@@ -59,7 +60,14 @@ def iter_urls_from_jsonl(path: Path, include_all_eval_labels: bool) -> Iterable[
                 yield str(row["url"])
 
 
-def collect_urls(paths: list[Path], include_all_eval_labels: bool, limit: int | None) -> list[str]:
+def collect_urls(
+    paths: list[Path],
+    include_all_eval_labels: bool,
+    limit: int | None,
+    fuzz_variants: int,
+    fuzz_start_index: int,
+    excluded_urls: set[str],
+) -> list[str]:
     seen: set[str] = set()
     urls: list[str] = []
     for path in paths:
@@ -67,15 +75,31 @@ def collect_urls(paths: list[Path], include_all_eval_labels: bool, limit: int | 
             print(f"Skipping missing source: {path}")
             continue
         for raw_url in iter_urls_from_jsonl(path, include_all_eval_labels):
-            canonical = canonicalize_url_for_lookup(raw_url)
-            url = canonical or raw_url.strip()
-            if not url or url in seen:
-                continue
-            seen.add(url)
-            urls.append(url)
-            if limit is not None and len(urls) >= limit:
-                return urls
+            candidates = [raw_url]
+            if fuzz_variants:
+                candidates = fuzz_urls(raw_url, fuzz_variants, start_index=fuzz_start_index)
+            for candidate in candidates:
+                canonical = canonicalize_url_for_lookup(candidate)
+                url = canonical or candidate.strip()
+                if not url or url in seen or url in excluded_urls:
+                    continue
+                seen.add(url)
+                urls.append(url)
+                if limit is not None and len(urls) >= limit:
+                    return urls
     return urls
+
+
+def collect_excluded_urls(paths: list[Path]) -> set[str]:
+    excluded: set[str] = set()
+    for path in paths:
+        if not path.exists():
+            continue
+        for raw_url in iter_urls_from_jsonl(path, include_all_eval_labels=True):
+            canonical = canonicalize_url_for_lookup(raw_url)
+            excluded.add(canonical or raw_url.strip())
+    excluded.discard("")
+    return excluded
 
 
 def existing_urls(session: Session) -> set[str]:
@@ -131,6 +155,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=50)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
+        "--fuzz-variants",
+        type=int,
+        default=0,
+        help="Seed this many deterministic similar variants per source URL instead of the exact URL.",
+    )
+    parser.add_argument(
+        "--fuzz-start-index",
+        type=int,
+        default=0,
+        help="Starting variant index for fuzzy seed generation.",
+    )
+    parser.add_argument(
+        "--exclude-urls-from",
+        type=Path,
+        nargs="*",
+        default=[],
+        help="JSONL files whose URLs must not be inserted exactly.",
+    )
+    parser.add_argument(
         "--include-all-eval-labels",
         action="store_true",
         help="For eval/detection_cases.jsonl, include benign URLs too. Default only includes phishing cases.",
@@ -143,7 +186,17 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     limit = None if args.limit == 0 else args.limit
-    urls = collect_urls(args.source, args.include_all_eval_labels, limit)
+    excluded_urls = collect_excluded_urls(args.exclude_urls_from)
+    if excluded_urls:
+        print(f"Excluded exact URLs: {len(excluded_urls)}")
+    urls = collect_urls(
+        args.source,
+        args.include_all_eval_labels,
+        limit,
+        args.fuzz_variants,
+        args.fuzz_start_index,
+        excluded_urls,
+    )
     seed_urls(urls, batch_size=args.batch_size, dry_run=args.dry_run)
 
 

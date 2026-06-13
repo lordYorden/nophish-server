@@ -43,7 +43,7 @@ async def expand_http_redirects(start_url: str) -> UrlScanResult:
             safety_error = await reject_unsafe_target(current_url)
             if safety_error:
                 return UrlScanResult(
-                    suspicious=True,
+                    suspicious=safety_error != "url_resolution_failure",
                     reasons=[safety_error],
                     raw_url=start_url,
                     final_url=current_url,
@@ -57,7 +57,7 @@ async def expand_http_redirects(start_url: str) -> UrlScanResult:
                     response = await get_small_response(client, current_url)
             except httpx.HTTPError as exc:
                 return UrlScanResult(
-                    suspicious=True,
+                    suspicious=False,
                     reasons=["url_resolution_failure"],
                     raw_url=start_url,
                     final_url=current_url,

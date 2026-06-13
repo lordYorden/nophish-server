@@ -21,6 +21,40 @@ print(sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.st
 PY
 }
 
+describe_cases() {
+  python - "$CASES" "$LIVE_LIMIT" <<'PY'
+from collections import Counter
+from pathlib import Path
+import json
+import sys
+
+path = Path(sys.argv[1])
+live_limit = int(sys.argv[2])
+rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+selected = rows[:live_limit]
+
+labels = Counter(row["label"] for row in selected)
+url_counts = Counter("with_urls" if row.get("urls") else "no_urls" for row in selected)
+tags = Counter(tag for row in selected for tag in row.get("tags", []))
+sources = Counter(row.get("source", "unknown") for row in selected)
+
+print(f"Selected cases: {len(selected)} of {len(rows)}")
+print("Labels: " + ", ".join(f"{key}={value}" for key, value in sorted(labels.items())))
+print("URL presence: " + ", ".join(f"{key}={value}" for key, value in sorted(url_counts.items())))
+print("Sources: " + ", ".join(f"{key}={value}" for key, value in sources.most_common(8)))
+print("Top tags: " + ", ".join(f"{key}={value}" for key, value in tags.most_common(12)))
+print("First selected case IDs: " + ", ".join(row["id"] for row in selected[:10]))
+
+print()
+print("Payload sent to app detector modules per case:")
+print("  NotificationSubmission(")
+print("    eventId=<case id>, sourceUserId='eval-user', circleId='eval-circle',")
+print("    title=None, body=<case body>, packageName=<case packageName>,")
+print("    timestamp=0, contentHash='eval-<case id>', urls=<case urls>")
+print("  )")
+PY
+}
+
 summarize_report() {
   local report="$1"
   local title="$2"
@@ -75,6 +109,15 @@ run_and_log() {
   "$@"
 }
 
+display_path() {
+  local path="$1"
+  if [[ "$path" == "$ROOT_DIR/"* ]]; then
+    echo "${path#"$ROOT_DIR/"}"
+  else
+    echo "$path"
+  fi
+}
+
 CASE_COUNT="$(count_cases)"
 
 echo "NoPhish non-LLM detection checks"
@@ -84,10 +127,14 @@ echo "Live limit: $LIVE_LIMIT"
 echo "Browser scanner enabled: $DYNAMIC_URL_SCANNER_ENABLE_BROWSER"
 echo "Run live embedding: $RUN_LIVE_EMBEDDING"
 echo "Results: $RESULTS_DIR"
+echo
+describe_cases
 
 echo
 echo "Running URL scanner checks against app.detectors.tasks.module_dynamic_url_scanner..."
+echo "Module payload: app.detectors.tasks.module_dynamic_url_scanner(NotificationSubmission)"
 START_SECONDS=$SECONDS
+rm -f "$RESULTS_DIR/url_scanner_eval.jsonl" "$RESULTS_DIR/url_scanner_eval_report.md"
 uv run python "$ROOT_DIR/eval/run_detection_eval.py" \
   --cases "$CASES" \
   --mode hybrid \
@@ -104,7 +151,9 @@ summarize_report "$RESULTS_DIR/url_scanner_eval_report.md" "URL Scanner Summary"
 if [[ "$RUN_LIVE_EMBEDDING" == "true" ]]; then
   echo
   echo "Running URL embedding live checks against app.detectors.tasks.module_url_embedding..."
+  echo "Module payload: app.detectors.tasks.module_url_embedding(NotificationSubmission)"
   START_SECONDS=$SECONDS
+  rm -f "$RESULTS_DIR/url_embedding_live_eval.jsonl" "$RESULTS_DIR/url_embedding_live_report.md"
   uv run python "$ROOT_DIR/eval/run_detection_eval.py" \
     --cases "$CASES" \
     --mode hybrid \
@@ -123,18 +172,21 @@ else
 fi
 
 echo
-echo "Running combined non-LLM checks..."
-COMBINED_MODULES="url_scanner"
+echo "Combining existing module outputs..."
+COMBINE_INPUTS=("$RESULTS_DIR/url_scanner_eval.jsonl")
 if [[ "$RUN_LIVE_EMBEDDING" == "true" ]]; then
-  COMBINED_MODULES="url_scanner,url_embedding"
+  COMBINE_INPUTS+=("$RESULTS_DIR/url_embedding_live_eval.jsonl")
 fi
+echo "Inputs:"
+for input in "${COMBINE_INPUTS[@]}"; do
+  echo "  $(display_path "$input")"
+done
+echo "No detector modules are rerun for this combined report."
 
 START_SECONDS=$SECONDS
-uv run python "$ROOT_DIR/eval/run_detection_eval.py" \
-  --cases "$CASES" \
-  --mode hybrid \
-  --modules "$COMBINED_MODULES" \
-  --live-limit "$LIVE_LIMIT" \
+rm -f "$RESULTS_DIR/non_llm_eval.jsonl" "$RESULTS_DIR/non_llm_report.md"
+uv run python "$ROOT_DIR/eval/combine_detection_results.py" \
+  --input "${COMBINE_INPUTS[@]}" \
   --out "$RESULTS_DIR/non_llm_eval.jsonl"
 
 uv run python "$ROOT_DIR/eval/report_detection_eval.py" \

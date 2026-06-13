@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -13,13 +12,20 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_rows(path: Path) -> list[dict[str, Any]]:
+def load_rows(path: Path, skip_bad_lines: bool = False) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as handle:
-        for line in handle:
+        for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
             if stripped:
-                rows.append(json.loads(stripped))
+                try:
+                    rows.append(json.loads(stripped))
+                except json.JSONDecodeError as exc:
+                    preview = stripped[:160]
+                    message = f"{path}:{line_number}: invalid JSONL row: {preview!r}"
+                    if not skip_bad_lines:
+                        raise ValueError(message) from exc
+                    print(f"Skipping {message}")
     return rows
 
 
@@ -168,6 +174,72 @@ def metrics_table(module_metrics: dict[str, dict[str, Any]]) -> str:
     )
 
 
+POLICIES: dict[str, tuple[tuple[str, ...], Any]] = {
+    "url_scanner_only": (("url_scanner",), lambda votes: votes["url_scanner"] is True),
+    "url_embedding_only": (("url_embedding",), lambda votes: votes["url_embedding"] is True),
+    "scanner_or_embedding": (
+        ("url_scanner", "url_embedding"),
+        lambda votes: votes["url_scanner"] is True or votes["url_embedding"] is True,
+    ),
+    "scanner_and_embedding": (
+        ("url_scanner", "url_embedding"),
+        lambda votes: votes["url_scanner"] is True and votes["url_embedding"] is True,
+    ),
+}
+
+
+def policy_metrics_table(rows: list[dict[str, Any]]) -> str:
+    top_level_modules = {"url_scanner", "url_embedding", "llm"}
+    by_case: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in rows:
+        module = row.get("module")
+        if module not in top_level_modules or not is_scored(row):
+            continue
+        case_id = str(row.get("case_id"))
+        by_case[case_id].setdefault(str(module), row)
+
+    present_modules = {module for modules in by_case.values() for module in modules}
+    table_rows = []
+    for policy, (required_modules, predicate) in POLICIES.items():
+        if not set(required_modules).issubset(present_modules):
+            continue
+
+        synthetic_rows = []
+        for case_modules in by_case.values():
+            if not all(module in case_modules for module in required_modules):
+                continue
+            base = case_modules[required_modules[0]]
+            votes = {module: bool(case_modules[module]["verdict"]) for module in required_modules}
+            synthetic = dict(base)
+            synthetic["module"] = policy
+            synthetic["verdict"] = bool(predicate(votes))
+            synthetic_rows.append(synthetic)
+
+        metrics = compute_metrics(synthetic_rows)
+        table_rows.append(
+            [
+                policy,
+                metrics["scored"],
+                metrics["tp"],
+                metrics["tn"],
+                metrics["fp"],
+                metrics["fn"],
+                format_rate(metrics["precision"]),
+                format_rate(metrics["recall"]),
+                format_rate(metrics["fpr"]),
+                format_rate(metrics["accuracy"]),
+            ]
+        )
+
+    if not table_rows:
+        return "No scored top-level module rows were available for policy metrics."
+
+    return markdown_table(
+        ["Policy", "Cases", "TP", "TN", "FP", "FN", "Precision", "Recall", "FPR", "Accuracy"],
+        table_rows,
+    )
+
+
 def confusion_matrix_table(module_metrics: dict[str, dict[str, Any]]) -> str:
     rows = []
     for module, metrics in module_metrics.items():
@@ -201,11 +273,25 @@ def failure_table(rows: list[dict[str, Any]], limit: int = 10) -> str:
                 ",".join(row.get("reasons") or []),
                 row.get("error") or "",
                 ",".join(metadata.get("tags") or []),
+                format_embedding_distance(metadata),
+                metadata.get("matched_url") or "",
             ]
         )
     if not table_rows:
         return "No rows."
-    return markdown_table(["Module", "Case", "Label", "Verdict", "Reasons", "Error", "Tags"], table_rows)
+    return markdown_table(
+        ["Module", "Case", "Label", "Verdict", "Reasons", "Error", "Tags", "Distance", "Matched URL"],
+        table_rows,
+    )
+
+
+def format_embedding_distance(metadata: dict[str, Any]) -> str:
+    if metadata.get("exact_match"):
+        return "exact"
+    distance = metadata.get("distance")
+    if distance is None:
+        return ""
+    return f"{float(distance):.6f}"
 
 
 def reason_breakdown(rows: list[dict[str, Any]]) -> str:
@@ -268,13 +354,13 @@ def embedding_threshold_sweep(rows: list[dict[str, Any]]) -> str:
         and not row.get("metadata", {}).get("skipped")
     ]
     if not embedding_rows:
-        return "No embedding distance metadata was available. Live module output currently returns only a boolean verdict."
+        return "No embedding distance metadata was available."
     table_rows = []
     for threshold in (0.05, 0.10, 0.15, 0.20, 0.25):
         synthetic = []
         for row in embedding_rows:
             copy = dict(row)
-            copy["verdict"] = float(row["metadata"]["distance"]) < threshold
+            copy["verdict"] = bool(row["metadata"].get("exact_match")) or float(row["metadata"]["distance"]) < threshold
             synthetic.append(copy)
         metrics = compute_metrics(synthetic)
         table_rows.append(
@@ -290,6 +376,68 @@ def embedding_threshold_sweep(rows: list[dict[str, Any]]) -> str:
             ]
         )
     return markdown_table(["Threshold", "TP", "TN", "FP", "FN", "Precision", "Recall", "FPR"], table_rows)
+
+
+def embedding_distance_breakdown(rows: list[dict[str, Any]]) -> str:
+    embedding_rows = [
+        row
+        for row in rows
+        if row["module"] == "url_embedding"
+        and row.get("metadata", {}).get("distance") is not None
+        and not row.get("metadata", {}).get("skipped")
+    ]
+    if not embedding_rows:
+        return "No embedding distance metadata was available."
+
+    phishing = [float(row["metadata"]["distance"]) for row in embedding_rows if row["label"] == "phishing"]
+    benign = [float(row["metadata"]["distance"]) for row in embedding_rows if row["label"] == "benign"]
+    summary_rows = [
+        ["phishing", len(phishing), format_number(percentile(phishing, 50)), format_number(percentile(phishing, 95)), format_number(min(phishing) if phishing else None), format_number(max(phishing) if phishing else None)],
+        ["benign", len(benign), format_number(percentile(benign, 50)), format_number(percentile(benign, 95)), format_number(min(benign) if benign else None), format_number(max(benign) if benign else None)],
+    ]
+
+    closest_benign = sorted(
+        [row for row in embedding_rows if row["label"] == "benign"],
+        key=lambda row: float(row["metadata"]["distance"]),
+    )[:10]
+    missed_phishing = sorted(
+        [
+            row
+            for row in embedding_rows
+            if row["label"] == "phishing" and row.get("verdict") is False
+        ],
+        key=lambda row: float(row["metadata"]["distance"]),
+    )[:10]
+
+    lines = [
+        markdown_table(["Label", "Rows", "Median", "P95", "Min", "Max"], summary_rows),
+        "",
+        "Closest benign rows:",
+        embedding_match_table(closest_benign),
+        "",
+        "Missed phishing rows:",
+        embedding_match_table(missed_phishing),
+    ]
+    return "\n".join(lines)
+
+
+def embedding_match_table(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return "No rows."
+    table_rows = []
+    for row in rows:
+        metadata = row.get("metadata", {})
+        table_rows.append(
+            [
+                row["case_id"],
+                row["label"],
+                row["verdict"],
+                format_embedding_distance(metadata),
+                metadata.get("checked_url") or "",
+                metadata.get("matched_url") or "",
+            ]
+        )
+    return markdown_table(["Case", "Label", "Verdict", "Distance", "Checked URL", "Matched URL"], table_rows)
 
 
 def best_worst_summary(module_metrics: dict[str, dict[str, Any]]) -> str:
@@ -373,6 +521,10 @@ def build_report(rows: list[dict[str, Any]], input_path: Path) -> str:
         "",
         metrics_table(module_metrics),
         "",
+        "## Combined Policy Metrics",
+        "",
+        policy_metrics_table(rows),
+        "",
         "## Confusion Matrices",
         "",
         confusion_matrix_table(module_metrics),
@@ -397,6 +549,10 @@ def build_report(rows: list[dict[str, Any]], input_path: Path) -> str:
         "",
         embedding_threshold_sweep(rows),
         "",
+        "## URL Embedding Distance Breakdown",
+        "",
+        embedding_distance_breakdown(rows),
+        "",
         "## Aggregator Comparison",
         "",
         aggregator_comparison(module_metrics),
@@ -413,13 +569,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "eval/results/detection_eval_report.md")
+    parser.add_argument(
+        "--skip-bad-lines",
+        action="store_true",
+        help="Skip invalid JSONL rows, useful after interrupted runs.",
+    )
     return parser
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    rows = load_rows(args.input)
+    rows = load_rows(args.input, skip_bad_lines=args.skip_bad_lines)
     report = build_report(rows, args.input)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(report, encoding="utf-8")

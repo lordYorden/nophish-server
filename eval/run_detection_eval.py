@@ -9,10 +9,9 @@ import json
 import logging
 import os
 import random
-import statistics
 import sys
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,7 +27,11 @@ from app.detectors.url_scanner.safety import reject_unsafe_target
 from app.detectors.url_scanner.scanner import scan_url
 from app.detectors.url_scanner.types import UrlScanResult
 from app.detectors.url_scanner.utils import hostname
+from app.database import get_engine
+from app.scheme.malicious_url import MaliciousUrl
 from app.scheme.notification import NotificationSubmission
+from sqlalchemy import func
+from sqlmodel import Session, select
 
 DEFAULT_PHISHING_SOURCES = (
     REPO_ROOT / "phising-fetcher/data/processed/israel_elderly_urls_sources.jsonl",
@@ -38,6 +41,7 @@ DEFAULT_ENV_FILES = (
     REPO_ROOT / ".env",
     REPO_ROOT / "llm/.env",
 )
+DEFAULT_MODULE_TIMEOUT_SECONDS = 30.0
 PRIMARY_MODULES = ("llm", "url_scanner", "url_embedding")
 AGGREGATOR_POLICIES = (
     "current_majority",
@@ -85,6 +89,14 @@ def configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=level, format="%(levelname)s:%(name)s:%(message)s")
     if not verbose:
         logging.getLogger("app.detectors.url_scanner.browser").setLevel(logging.ERROR)
+
+
+def module_timeout_seconds() -> float:
+    raw_value = os.getenv("EVAL_MODULE_TIMEOUT_SECONDS", str(DEFAULT_MODULE_TIMEOUT_SECONDS))
+    try:
+        return max(1.0, float(raw_value))
+    except ValueError:
+        return DEFAULT_MODULE_TIMEOUT_SECONDS
 
 
 def load_cases(path: Path) -> list[EvalCase]:
@@ -239,8 +251,17 @@ async def run_url_scanner(case: EvalCase, mode: str) -> list[dict[str, Any]]:
             start = now_ms()
             try:
                 tasks = import_detector_tasks_safely()
-                module_row["verdict"] = bool(await tasks.module_dynamic_url_scanner(submission_for(case)))
+                module_row["verdict"] = bool(
+                    await asyncio.wait_for(
+                        tasks.module_dynamic_url_scanner(submission_for(case)),
+                        timeout=module_timeout_seconds(),
+                    )
+                )
                 module_row["metadata"]["direct_app_module"] = "app.detectors.tasks.module_dynamic_url_scanner"
+            except TimeoutError:
+                module_row["verdict"] = False
+                module_row["reasons"] = ["eval_timeout"]
+                module_row["error"] = "TimeoutError"
             except Exception as exc:
                 module_row["error"] = type(exc).__name__
             module_row["latency_ms"] = round(now_ms() - start, 3)
@@ -323,7 +344,14 @@ async def run_url_scanner(case: EvalCase, mode: str) -> list[dict[str, Any]]:
             )
         else:
             try:
-                scan_result = await scan_url(raw_url)
+                scan_result = await asyncio.wait_for(scan_url(raw_url), timeout=module_timeout_seconds())
+            except TimeoutError:
+                scan_result = UrlScanResult(
+                    suspicious=False,
+                    reasons=["eval_timeout"],
+                    raw_url=raw_url,
+                    error="TimeoutError",
+                )
             except Exception as exc:
                 scan_result = UrlScanResult(
                     suspicious=False,
@@ -347,8 +375,17 @@ async def run_url_scanner(case: EvalCase, mode: str) -> list[dict[str, Any]]:
             module_row["metadata"]["offline_static_breakdown_used"] = True
         else:
             tasks = import_detector_tasks_safely()
-            module_row["verdict"] = bool(await tasks.module_dynamic_url_scanner(submission_for(case)))
+            module_row["verdict"] = bool(
+                await asyncio.wait_for(
+                    tasks.module_dynamic_url_scanner(submission_for(case)),
+                    timeout=module_timeout_seconds(),
+                )
+            )
             module_row["metadata"]["direct_app_module"] = "app.detectors.tasks.module_dynamic_url_scanner"
+    except TimeoutError:
+        module_row["verdict"] = False
+        module_row["reasons"] = ["eval_timeout"]
+        module_row["error"] = "TimeoutError"
     except Exception as exc:
         module_row["error"] = type(exc).__name__
     module_row["latency_ms"] = round(now_ms() - module_start, 3)
@@ -371,6 +408,8 @@ async def run_url_safety(case: EvalCase, url: str) -> dict[str, Any]:
     try:
         reason = await reject_unsafe_target(url)
         row["verdict"] = bool(reason)
+        if reason == "url_resolution_failure":
+            row["verdict"] = False
         row["reasons"] = [reason] if reason else []
         row["error"] = reason
     except Exception as exc:
@@ -383,8 +422,15 @@ async def run_url_safety(case: EvalCase, url: str) -> dict[str, Any]:
 async def run_http_redirect(case: EvalCase, url: str) -> dict[str, Any]:
     start = now_ms()
     try:
-        scan_result = await expand_http_redirects(url)
+        scan_result = await asyncio.wait_for(expand_http_redirects(url), timeout=module_timeout_seconds())
         return result_from_url_scan(case, "url_scanner.http_redirect", scan_result, now_ms() - start)
+    except TimeoutError:
+        row = base_result(case, "url_scanner.http_redirect", now_ms() - start)
+        row["verdict"] = False
+        row["reasons"] = ["eval_timeout"]
+        row["error"] = "TimeoutError"
+        row["metadata"]["normalized_url"] = url
+        return row
     except Exception as exc:
         row = base_result(case, "url_scanner.http_redirect", now_ms() - start)
         row["error"] = type(exc).__name__
@@ -397,8 +443,15 @@ async def run_browser(case: EvalCase, url: str) -> dict[str, Any]:
     try:
         from app.detectors.url_scanner.browser import expand_with_browser
 
-        scan_result = await expand_with_browser(url)
+        scan_result = await asyncio.wait_for(expand_with_browser(url), timeout=module_timeout_seconds())
         return result_from_url_scan(case, "url_scanner.browser", scan_result, now_ms() - start)
+    except TimeoutError:
+        row = base_result(case, "url_scanner.browser", now_ms() - start)
+        row["verdict"] = False
+        row["reasons"] = ["eval_timeout"]
+        row["error"] = "TimeoutError"
+        row["metadata"]["normalized_url"] = url
+        return row
     except Exception as exc:
         row = base_result(case, "url_scanner.browser", now_ms() - start)
         row["error"] = type(exc).__name__
@@ -430,11 +483,77 @@ async def run_url_embedding(case: EvalCase, mode: str, seed_urls: set[str]) -> l
         verdict = await tasks.module_url_embedding(submission_for(case))
         row["verdict"] = bool(verdict)
         row["metadata"]["direct_app_module"] = "app.detectors.tasks.module_url_embedding"
+        row["metadata"]["embedding_checks"] = await collect_embedding_checks(case.urls, tasks)
+        distances = [
+            check["distance"]
+            for check in row["metadata"]["embedding_checks"]
+            if check.get("distance") is not None
+        ]
+        if distances:
+            best = min(
+                row["metadata"]["embedding_checks"],
+                key=lambda check: check["distance"]
+                if check.get("distance") is not None
+                else float("inf"),
+            )
+            row["metadata"]["distance"] = best.get("distance")
+            row["metadata"]["matched_url"] = best.get("matched_url")
+            row["metadata"]["checked_url"] = best.get("checked_url")
+        exact_matches = [
+            check for check in row["metadata"]["embedding_checks"] if check.get("exact_match")
+        ]
+        if exact_matches:
+            row["metadata"]["exact_match"] = True
+            row["metadata"]["matched_url"] = exact_matches[0].get("matched_url")
+            row["metadata"]["checked_url"] = exact_matches[0].get("checked_url")
     except Exception as exc:
         row["error"] = type(exc).__name__
     row["latency_ms"] = round(now_ms() - start, 3)
     row["metadata"]["mode"] = "live_module_url_embedding"
     return [row]
+
+
+async def collect_embedding_checks(urls: list[str], tasks: Any) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    with Session(get_engine()) as session:
+        db_count = session.exec(select(func.count(MaliciousUrl.id))).one()
+        for raw_url in urls:
+            checked_url = tasks.url_for_embedding(raw_url)
+            exact_match = tasks.get_existing_malicious_url(session, raw_url)
+            check: dict[str, Any] = {
+                "raw_url": raw_url,
+                "checked_url": checked_url,
+                "db_count": db_count,
+                "exact_match": bool(exact_match),
+                "matched_url": exact_match.url if exact_match else None,
+                "distance": 0.0 if exact_match else None,
+            }
+            checks.append(check)
+
+    for check in checks:
+        if check["exact_match"] or check["db_count"] == 0:
+            continue
+        embedding = await tasks.get_url_embedding_async(check["checked_url"])
+        nearest = await asyncio.to_thread(get_nearest_embedding_match, embedding)
+        if nearest:
+            check["distance"] = round(float(nearest["distance"]), 6)
+            check["matched_url"] = nearest["url"]
+    return checks
+
+
+def get_nearest_embedding_match(embedding: list[float]) -> dict[str, Any] | None:
+    distance_expr = MaliciousUrl.embedding.cosine_distance(embedding).label("distance")
+    statement = (
+        select(MaliciousUrl.url, distance_expr)
+        .order_by(distance_expr)
+        .limit(1)
+    )
+    with Session(get_engine()) as session:
+        row = session.exec(statement).first()
+    if not row:
+        return None
+    url, distance = row
+    return {"url": url, "distance": distance}
 
 
 def import_detector_tasks_safely():
@@ -543,10 +662,24 @@ async def run(args: argparse.Namespace) -> None:
 
     seed_urls = load_phishing_seed_urls(args.phishing_sources)
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    total_work = len(cases) * len(args.modules)
+    completed_work = 0
+
+    print(
+        f"Eval start: cases={len(cases)} modules={','.join(args.modules)} "
+        f"mode={args.mode} out={args.out}",
+        flush=True,
+    )
 
     with args.out.open("w", encoding="utf-8") as output:
         for index, case in enumerate(cases, start=1):
             for module in args.modules:
+                completed_work += 1
+                print(
+                    f"[{completed_work}/{total_work}] module={module} "
+                    f"case={case.id} label={case.label} urls={len(case.urls)}",
+                    flush=True,
+                )
                 try:
                     rows = await run_module(case, module, args.mode, seed_urls)
                 except Exception as exc:
