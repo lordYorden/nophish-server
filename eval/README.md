@@ -90,6 +90,65 @@ uv run python eval/seed_malicious_urls.py --dry-run
 uv run python eval/seed_malicious_urls.py --limit 500
 ```
 
+Recommended same-origin seed augmentation:
+
+```bash
+uv run python eval/seed_malicious_urls.py \
+  --limit 500 \
+  --fuzz-variants 2
+```
+
+Recommended seed augmentation with shortlink expansion:
+
+```bash
+uv run python eval/seed_malicious_urls.py \
+  --limit 500 \
+  --fuzz-variants 2 \
+  --expand-shortlinks
+```
+
+Dry-run the shortlink expansion path before inserting:
+
+```bash
+uv run python eval/seed_malicious_urls.py \
+  --limit 50 \
+  --fuzz-variants 2 \
+  --expand-shortlinks \
+  --dry-run
+```
+
+The same seeding flow can run from `init_db()` on server startup when explicitly enabled:
+
+```bash
+SEED_MALICIOUS_URLS_ON_INIT=true
+MALICIOUS_URL_SEED_IF_EMPTY_ONLY=true
+MALICIOUS_URL_SEED_LIMIT=500
+MALICIOUS_URL_SEED_FUZZ_VARIANTS=2
+MALICIOUS_URL_SEED_EXPAND_SHORTLINKS=true
+```
+
+Use this only for one-off local/dev reseeds:
+
+```bash
+CLEAR_MALICIOUS_URLS_ON_INIT=true
+```
+
+Do not leave `CLEAR_MALICIOUS_URLS_ON_INIT=true` enabled in normal server runs, because every restart would wipe and rebuild the seed table.
+
+Startup seed environment variables:
+
+- `SEED_MALICIOUS_URLS_ON_INIT`: enable init-time seeding. Default `false`.
+- `MALICIOUS_URL_SEED_IF_EMPTY_ONLY`: skip startup seeding when `maliciousurl` already has rows. Default `true`.
+- `CLEAR_MALICIOUS_URLS_ON_INIT`: delete existing `maliciousurl` rows before seeding. Default `false`.
+- `MALICIOUS_URL_SEED_LIMIT`: max unique URLs to seed. Use `0` for no limit. Default `500`.
+- `MALICIOUS_URL_SEED_FUZZ_VARIANTS`: same-origin variants per non-shortener URL. Default `2`.
+- `MALICIOUS_URL_SEED_EXPAND_SHORTLINKS`: resolve known shorteners during startup seeding. Default `false`.
+- `MALICIOUS_URL_SEED_SHORTLINK_TIMEOUT_SECONDS`: shortlink expansion timeout. Default `5`.
+- `MALICIOUS_URL_SEED_SHORTLINK_MAX_REDIRECTS`: redirect limit. Default `5`.
+- `MALICIOUS_URL_SEED_SHORTLINK_SEED_RAW`: seed observed shortlinks exactly. Default `true`.
+- `MALICIOUS_URL_SEED_BATCH_SIZE`: insert commit batch size. Default `50`.
+- `MALICIOUS_URL_SEED_SOURCES`: optional `:`-separated source file list.
+
 Defaults:
 
 - Loads `.env` and `llm/.env`.
@@ -99,22 +158,24 @@ Defaults:
 
 Use `--limit 0` to seed all available source URLs.
 
-For non-exact similarity testing, generate fuzzy eval cases and seed different fuzzy variants:
+`--fuzz-variants` is intentionally conservative:
+
+- It seeds the exact observed malicious URL plus deterministic same-origin variants.
+- It never invents new domains.
+- It never changes the TLD.
+- It never adds phishing words such as `secure`, `verify`, or `login` to the hostname.
+- Known shortener URLs are never fuzzed directly.
+- With `--expand-shortlinks`, known shorteners are resolved and only the final destination can receive same-origin variants.
+- If shortlink expansion fails, the raw shortlink is seeded exact-only and no variants are generated from it.
+
+Generated non-exact case files are diagnostic only. Do not use them as the main accuracy corpus. They are useful for inspecting embedding distance behavior, not for reporting real model quality.
 
 ```bash
 uv run python eval/build_fuzzy_cases.py \
   --input eval/detection_cases.jsonl \
   --out eval/detection_cases_fuzzy.jsonl \
   --start-index 100
-
-uv run python eval/seed_malicious_urls.py \
-  --limit 500 \
-  --fuzz-variants 2 \
-  --fuzz-start-index 0 \
-  --exclude-urls-from eval/detection_cases_fuzzy.jsonl
 ```
-
-This setup avoids exact URL overlap between evaluated phishing URLs and newly seeded fuzzy rows.
 
 ```bash
 uv run python eval/run_detection_eval.py \

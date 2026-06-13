@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
-"""Build eval cases whose phishing URLs are similar variants, not exact seed URLs."""
+"""Build same-origin non-exact diagnostic cases for embedding distance checks."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
-
-from url_fuzzing import fuzz_url
+from urllib.parse import urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from app.detectors.url_scanner.heuristics import is_shortener
+from url_fuzzing import fuzz_url
+
+
+def is_shortlink(raw_url: str) -> bool:
+    split = urlsplit(raw_url.strip())
+    return bool(split.hostname and is_shortener(split.hostname.lower().rstrip(".")))
 
 
 def build_cases(input_path: Path, output_path: Path, start_index: int) -> None:
@@ -25,21 +35,31 @@ def build_cases(input_path: Path, output_path: Path, start_index: int) -> None:
                 continue
 
             fuzzed_urls = []
+            skipped_shortlinks = []
             for url_index, url in enumerate(case["urls"]):
-                fuzzed = fuzz_url(str(url), start_index + line_number + url_index)
-                fuzzed_urls.append(fuzzed or url)
+                raw_url = str(url)
+                if is_shortlink(raw_url):
+                    skipped_shortlinks.append(raw_url)
+                    fuzzed_urls.append(raw_url)
+                    continue
+                fuzzed = fuzz_url(raw_url, start_index + line_number + url_index)
+                fuzzed_urls.append(fuzzed or raw_url)
 
             original_urls = case["urls"]
             case = dict(case)
             case["id"] = f"{case['id']}_fuzzy"
             case["body"] = replace_urls(case["body"], original_urls, fuzzed_urls)
             case["urls"] = fuzzed_urls
-            case["source"] = f"{case.get('source', 'unknown')}:fuzzy_eval"
-            case["tags"] = sorted(set(case.get("tags", [])) | {"fuzzy", "non_exact"})
+            case["source"] = f"{case.get('source', 'unknown')}:same_origin_diagnostic"
+            case["tags"] = sorted(
+                set(case.get("tags", [])) | {"same_origin", "non_exact", "diagnostic"}
+            )
             case["notes"] = (
-                f"Fuzzy non-exact variant generated from {case.get('id', '')}; "
+                "Same-origin non-exact diagnostic variant; not primary accuracy truth; "
                 f"original_urls={original_urls}"
             )
+            if skipped_shortlinks:
+                case["notes"] += f"; shortlink_fuzzing_skipped={skipped_shortlinks}"
             output.write(json.dumps(case, ensure_ascii=False, sort_keys=True) + "\n")
 
 

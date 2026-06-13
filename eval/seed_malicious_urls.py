@@ -8,20 +8,27 @@ import json
 import sys
 from collections.abc import Iterable
 from pathlib import Path
+from urllib.parse import urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import httpx
 from dotenv import load_dotenv
 from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.database import get_engine
 from app.detectors.url_scanner import canonicalize_url_for_lookup
+from app.detectors.url_scanner.heuristics import is_shortener
 from app.scheme.malicious_url import MaliciousUrl
 from llm.openr import get_url_embedding
-from url_fuzzing import fuzz_urls
+
+try:
+    from eval.url_fuzzing import fuzz_urls
+except ModuleNotFoundError:
+    from url_fuzzing import fuzz_urls
 
 DEFAULT_ENV_FILES = (
     REPO_ROOT / ".env",
@@ -60,6 +67,103 @@ def iter_urls_from_jsonl(path: Path, include_all_eval_labels: bool) -> Iterable[
                 yield str(row["url"])
 
 
+def hostname(raw_url: str) -> str | None:
+    split = urlsplit(raw_url.strip())
+    if not split.hostname:
+        return None
+    return split.hostname.lower().rstrip(".")
+
+
+def append_candidate(
+    candidates: list[str],
+    candidate: str,
+    *,
+    fuzz_variants: int,
+    fuzz_start_index: int,
+) -> None:
+    candidates.append(candidate)
+    if fuzz_variants:
+        variants = fuzz_urls(candidate, fuzz_variants, start_index=fuzz_start_index)
+        if variants:
+            print(
+                f"Generated same-origin variants: source={candidate} count={len(variants)}"
+            )
+        candidates.extend(variants)
+
+
+def expand_shortlink(
+    raw_url: str,
+    *,
+    timeout_seconds: float,
+    max_redirects: int,
+) -> str | None:
+    try:
+        with httpx.Client(
+            follow_redirects=True,
+            max_redirects=max_redirects,
+            timeout=timeout_seconds,
+        ) as client:
+            response = client.get(raw_url)
+            return str(response.url)
+    except Exception as exc:
+        print(f"Shortlink expansion failed: {raw_url} reason={type(exc).__name__}")
+        return None
+
+
+def candidate_urls_for_source(
+    raw_url: str,
+    *,
+    fuzz_variants: int,
+    fuzz_start_index: int,
+    expand_shortlinks: bool,
+    shortlink_timeout_seconds: float,
+    shortlink_max_redirects: int,
+    shortlink_seed_raw: bool,
+) -> list[str]:
+    candidates: list[str] = []
+    host = hostname(raw_url)
+    if host and is_shortener(host):
+        print(f"Shortlink detected: {raw_url}")
+        if shortlink_seed_raw:
+            candidates.append(raw_url)
+
+        if not expand_shortlinks:
+            print(f"Skipping variants for shortlink host: {host}")
+            return candidates
+
+        final_url = expand_shortlink(
+            raw_url,
+            timeout_seconds=shortlink_timeout_seconds,
+            max_redirects=shortlink_max_redirects,
+        )
+        if not final_url or final_url.strip() == raw_url.strip():
+            print(f"Skipping variants for shortlink host: {host}")
+            return candidates
+
+        print(f"Shortlink expanded: {raw_url} -> {final_url}")
+        final_host = hostname(final_url)
+        if final_host and is_shortener(final_host):
+            candidates.append(final_url)
+            print(f"Skipping variants for shortlink host: {final_host}")
+            return candidates
+
+        append_candidate(
+            candidates,
+            final_url,
+            fuzz_variants=fuzz_variants,
+            fuzz_start_index=fuzz_start_index,
+        )
+        return candidates
+
+    append_candidate(
+        candidates,
+        raw_url,
+        fuzz_variants=fuzz_variants,
+        fuzz_start_index=fuzz_start_index,
+    )
+    return candidates
+
+
 def collect_urls(
     paths: list[Path],
     include_all_eval_labels: bool,
@@ -67,6 +171,10 @@ def collect_urls(
     fuzz_variants: int,
     fuzz_start_index: int,
     excluded_urls: set[str],
+    expand_shortlinks: bool,
+    shortlink_timeout_seconds: float,
+    shortlink_max_redirects: int,
+    shortlink_seed_raw: bool,
 ) -> list[str]:
     seen: set[str] = set()
     urls: list[str] = []
@@ -75,9 +183,15 @@ def collect_urls(
             print(f"Skipping missing source: {path}")
             continue
         for raw_url in iter_urls_from_jsonl(path, include_all_eval_labels):
-            candidates = [raw_url]
-            if fuzz_variants:
-                candidates = fuzz_urls(raw_url, fuzz_variants, start_index=fuzz_start_index)
+            candidates = candidate_urls_for_source(
+                raw_url,
+                fuzz_variants=fuzz_variants,
+                fuzz_start_index=fuzz_start_index,
+                expand_shortlinks=expand_shortlinks,
+                shortlink_timeout_seconds=shortlink_timeout_seconds,
+                shortlink_max_redirects=shortlink_max_redirects,
+                shortlink_seed_raw=shortlink_seed_raw,
+            )
             for candidate in candidates:
                 canonical = canonicalize_url_for_lookup(candidate)
                 url = canonical or candidate.strip()
@@ -158,13 +272,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--fuzz-variants",
         type=int,
         default=0,
-        help="Seed this many deterministic similar variants per source URL instead of the exact URL.",
+        help="Seed this many deterministic same-origin variants per non-shortener source URL in addition to the exact URL.",
     )
     parser.add_argument(
         "--fuzz-start-index",
         type=int,
         default=0,
-        help="Starting variant index for fuzzy seed generation.",
+        help="Starting variant index for deterministic same-origin variant generation.",
+    )
+    parser.add_argument(
+        "--expand-shortlinks",
+        action="store_true",
+        help="Resolve known shortener URLs and seed the final destination. Network access is required.",
+    )
+    parser.add_argument(
+        "--shortlink-timeout-seconds",
+        type=float,
+        default=5.0,
+        help="Timeout for shortlink expansion requests.",
+    )
+    parser.add_argument(
+        "--shortlink-max-redirects",
+        type=int,
+        default=5,
+        help="Maximum redirects to follow during shortlink expansion.",
+    )
+    parser.add_argument(
+        "--shortlink-seed-raw",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Seed the observed shortlink exactly. Enabled by default.",
     )
     parser.add_argument(
         "--exclude-urls-from",
@@ -196,6 +333,10 @@ def main() -> None:
         args.fuzz_variants,
         args.fuzz_start_index,
         excluded_urls,
+        args.expand_shortlinks,
+        args.shortlink_timeout_seconds,
+        args.shortlink_max_redirects,
+        args.shortlink_seed_raw,
     )
     seed_urls(urls, batch_size=args.batch_size, dry_run=args.dry_run)
 
