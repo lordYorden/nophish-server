@@ -20,13 +20,7 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
    uv sync
    ```
 
-2. **Run database migrations**
-
-   ```bash
-   uv run alembic upgrade head
-   ```
-
-3. **Run the server**
+2. **Run the server**
 
    ```bash
    uv run python main.py
@@ -34,7 +28,7 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 
    **Note**: The server expects Redis and Postgres to be running separately. By default it connects to Redis at `localhost:6379` and uses `DATABASE_URL` for Postgres, falling back to `postgresql+psycopg://nophish:nophish@localhost:5432/nophish`.
 
-4. **Access the API**
+3. **Access the API**
    - API Base URL: `http://localhost:8000`
    - Interactive API Documentation: `http://localhost:8000/docs`
 
@@ -48,7 +42,6 @@ You can find the android app repo [here](https://github.com/lordYorden/NoPhish-A
 - **AI Engine**: `OpenAI` (via LLM module) for message analysis
 - **Infrastructure**: `Docker Compose` for local Redis, Postgres, and worker services
 - **Messaging**: `Firebase Cloud Messaging (FCM)` for real-time phishing alerts
-- **Migrations**: `Alembic` for schema versioning
 - **Package Manager**: `uv`
 
 ### Detection Pipeline
