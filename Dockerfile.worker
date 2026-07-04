@@ -1,25 +1,6 @@
-# ─────────────────────────────────────────────
-# Stage 1: install dependencies with uv
-# ─────────────────────────────────────────────
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
-
-WORKDIR /app
-
-# Copy only the dependency manifests first (leverages layer cache)
-COPY pyproject.toml uv.lock ./
-
-# Install all project dependencies into /venv (no editable install yet)
-RUN uv sync --frozen --no-install-project --no-dev
-
-# ─────────────────────────────────────────────
-# Stage 2: production image
-# ─────────────────────────────────────────────
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
-
-# Copy the pre-built virtual environment from the builder stage
-COPY --from=builder /app/.venv /app/.venv
 
 # Tell uv (and Python) to use the pre-built venv
 ENV UV_PROJECT_ENVIRONMENT=/app/.venv
@@ -29,6 +10,12 @@ ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
 
 # HuggingFace model cache – can be overridden at runtime via a volume
 ENV HF_HOME=/app/.hf_cache
+
+# Copy only the dependency manifests first (leverages layer cache)
+COPY pyproject.toml uv.lock ./
+
+# Install all project dependencies into the runtime image.
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Install Chromium and the OS libraries Playwright needs at runtime.
 # Keep this in the final image because the worker is where browser scans run.

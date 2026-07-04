@@ -75,7 +75,7 @@ async def expand_with_browser(url: str) -> UrlScanResult:
             await browser.close()
     except playwright_async_api.TimeoutError as exc:
         return UrlScanResult(
-            suspicious=True,
+            suspicious=False,
             reasons=["browser_timeout"],
             raw_url=url,
             final_url=url,
@@ -86,7 +86,7 @@ async def expand_with_browser(url: str) -> UrlScanResult:
     except Exception as exc:
         logger.warning("Browser expansion failed for %s: %s", url, exc, exc_info=True)
         return UrlScanResult(
-            suspicious=True,
+            suspicious=False,
             reasons=["browser_failure"],
             raw_url=url,
             final_url=url,

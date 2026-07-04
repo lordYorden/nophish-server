@@ -10,6 +10,10 @@ from app.logging_config import LOGGING_CONFIG
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 dictConfig(LOGGING_CONFIG)
 
 logger = logging.getLogger(__name__)

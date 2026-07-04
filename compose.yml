@@ -16,6 +16,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   worker:
+    image: nophish-server-worker:latest
     build:
       context: .
       dockerfile: Dockerfile.worker
