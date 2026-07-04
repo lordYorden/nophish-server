@@ -1,3 +1,4 @@
+import logging
 import os
 from sqlmodel import create_engine, SQLModel, Session
 from sqlalchemy import delete, text
@@ -5,6 +6,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 
 _engine = None
+logger = logging.getLogger(__name__)
 
 
 def get_engine():
@@ -26,7 +28,10 @@ def init_db():
         conn.commit()
     import_table_models()
     SQLModel.metadata.create_all(engine)
-    maybe_seed_malicious_urls()
+    try:
+        maybe_seed_malicious_urls()
+    except Exception:
+        logger.exception("Malicious URL seed on init failed; continuing startup")
 
 
 def import_table_models() -> None:
@@ -48,19 +53,12 @@ def env_int(name: str, default: int) -> int:
     return int(value)
 
 
-def env_float(name: str, default: float) -> float:
-    value = os.getenv(name)
-    if value is None or not value.strip():
-        return default
-    return float(value)
-
-
 def maybe_seed_malicious_urls() -> None:
     if not env_flag("SEED_MALICIOUS_URLS_ON_INIT"):
         return
 
     from app.scheme.malicious_url import MaliciousUrl
-    from eval import seed_malicious_urls
+    from fuzzing import seed_malicious_urls
 
     seed_malicious_urls.load_env_files()
 
@@ -92,12 +90,6 @@ def maybe_seed_malicious_urls() -> None:
         env_int("MALICIOUS_URL_SEED_FUZZ_VARIANTS", 2),
         env_int("MALICIOUS_URL_SEED_FUZZ_START_INDEX", 0),
         excluded_urls=set(),
-        expand_shortlinks=env_flag("MALICIOUS_URL_SEED_EXPAND_SHORTLINKS"),
-        shortlink_timeout_seconds=env_float(
-            "MALICIOUS_URL_SEED_SHORTLINK_TIMEOUT_SECONDS", 5.0
-        ),
-        shortlink_max_redirects=env_int("MALICIOUS_URL_SEED_SHORTLINK_MAX_REDIRECTS", 5),
-        shortlink_seed_raw=env_flag("MALICIOUS_URL_SEED_SHORTLINK_SEED_RAW", True),
     )
     seed_malicious_urls.seed_urls(
         urls,
