@@ -28,7 +28,7 @@ class NotificationSubmission(SQLModel):
     timestamp: int
     contentHash: str
     urls: List[str] = Field(default_factory=list)
-    allowExternalAnalysis: bool
+    allowExternalAnalysis: bool = False
 
     model_config = ConfigDict(extra="forbid")
 
