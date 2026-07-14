@@ -135,17 +135,23 @@ async def module_url_embedding(notif: NotificationSubmission) -> bool:
 
 
 async def aggregate_and_act(results, notif: NotificationSubmission):
+
     phishing_votes = sum(1 for result in results if result)
-    
+
+    if notif.allowExternalAnalysis:
+        is_malicious = phishing_votes >= 2
+    else:
+        is_malicious = any(results)
+
     logger.info(
         "Aggregated notification verdict: eventId=%s timestamp=%s verdict=%s votes=%s/3",
         notif.eventId,
         notif.timestamp,
-        "malicious" if phishing_votes >= 2 else "benign",
+        "malicious" if is_malicious else "benign",
         phishing_votes,
     )
 
-    if phishing_votes >= 2:
+    if is_malicious:
         if not mark_event_alerted(notif.eventId):
             logger.info(
                 "Skipping duplicate malicious alert: eventId=%s timestamp=%s",
@@ -158,7 +164,11 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
             topic=circle_topic(notif.circleId),
             title="Phishing Alert",
             body="A notification has been flagged as phishing.",
-            data={"data": notif.model_dump_json(exclude_none=True)},
+            data={
+                "data": notif.model_dump_json(
+                    exclude_none=True,
+                )
+            },
         )
 
         if notif.urls:
@@ -181,12 +191,11 @@ async def aggregate_and_act(results, notif: NotificationSubmission):
 
 
 async def detector_pipeline(ctx, notif: NotificationSubmission):
-    
-    # Run all three modules simultaneously
-    results = await asyncio.gather(
-        run_llm_and_decide(notif),
-        module_dynamic_url_scanner(notif),
-        module_url_embedding(notif),
+
+    logger.info(
+        "allow ai: %s, msg body length: %s",
+        notif.allowExternalAnalysis,
+        len(notif.body)
     )
 
     logger.info(
@@ -195,6 +204,20 @@ async def detector_pipeline(ctx, notif: NotificationSubmission):
         notif.eventId,
         notif.timestamp,
     )
+
+    results = None
+
+    if notif.allowExternalAnalysis:
+        results = await asyncio.gather(
+            run_llm_and_decide(notif),
+            module_dynamic_url_scanner(notif),
+            module_url_embedding(notif),
+        )
+    else:
+        results = await asyncio.gather(
+            module_dynamic_url_scanner(notif),
+            module_url_embedding(notif),
+        )
 
     await aggregate_and_act(results, notif)
 
