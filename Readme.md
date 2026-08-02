@@ -22,6 +22,16 @@ Android app: [lordYorden/nophish-android](https://github.com/lordYorden/nophish-
 - Sends malicious-event alerts through Firebase Cloud Messaging topics.
 - Can seed known malicious URL vectors from the local fuzzing datasets.
 
+## Book-to-Code Highlights
+
+- **Three-layer phishing detection:** The worker combines [LLM message analysis](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L57-L67), [dynamic URL scanning](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L70-L90), and [malicious-URL vector matching](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L93-L134), running the modules [in parallel](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L210-L215).
+- **Majority-vote verdicts:** When external AI analysis is enabled, an event is malicious only when [at least two detection modules agree](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L137-L152). This makes a single detector signal insufficient to alert the trusted circle.
+- **Short-link expansion and redirect-chain analysis:** The URL scanner [follows HTTP redirects, detects loops and redirect limits, and probes HTML and JavaScript redirects](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/url_scanner/http_redirects.py#L21-L128), with a [headless-browser fallback for shorteners](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/url_scanner/scanner.py#L58-L77).
+- **Obfuscation and impersonation resistance:** URLs are [normalised and checked for punycode, Unicode-confusable, mixed-script, IP-host, excessive-subdomain, and brand-impersonation signals](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/url_scanner/normalization.py#L26-L90).
+- **Trusted-circle alerts:** A malicious verdict is routed to a [circle-specific FCM topic](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L163-L172), where [Firebase Cloud Messaging delivers the event](https://github.com/lordYorden/nophish-server/blob/main/fcm/firebase.py#L11-L22) to a family member or trusted contact.
+- **Known-malicious URL similarity matching:** The system performs [exact URL matching and vector-distance lookup](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L93-L134) against a [pgvector-backed URL corpus](https://github.com/lordYorden/nophish-server/blob/main/app/scheme/malicious_url.py#L6-L14), helping it recognise variants of known phishing URLs.
+- **Privacy-aware analysis:** Clients explicitly choose whether to allow [external LLM analysis](https://github.com/lordYorden/nophish-server/blob/main/app/scheme/notification.py#L21-L33); when they opt out, the worker skips the LLM and [continues with local URL-based detection](https://github.com/lordYorden/nophish-server/blob/main/app/detectors/tasks.py#L216-L220).
+
 ## Architecture
 
 ![NoPhish architecture](./docs/archi-v6.png)
